@@ -644,6 +644,7 @@ add)
             SM8550) cpu="8 Gen 2" ;;
             s5e9965) cpu="Exynos 2600" ;;
             s5e9955) cpu="Exynos 2500" ;;
+            s5e9945) cpu="Exynos 2400" ;;
             *) cpu="" ;;
         esac
         # The Folds' overlay says "Qualcomm Snapdragon %s"; every other phone's

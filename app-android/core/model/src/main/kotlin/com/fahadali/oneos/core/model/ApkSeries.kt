@@ -26,7 +26,7 @@ enum class ApkSeries(val id: String, val label: String, val profileIds: List<Str
         listOf(
             Profiles.ID_S_ULTRA_8750, Profiles.ID_S_PLUS_8750, Profiles.ID_S_8750, Profiles.ID_S_ULTRA_8650,
             Profiles.ID_S_8550, Profiles.ID_S_PLUS_8550, Profiles.ID_FLIP7, Profiles.ID_A56, Profiles.ID_A57, Profiles.ID_FLIP5,
-            Profiles.ID_A07, Profiles.ID_A36,
+            Profiles.ID_A07, Profiles.ID_A36, Profiles.ID_S_9945,
         ),
     ),
     ;

@@ -219,9 +219,18 @@ class ProfilesTest {
         assertEquals(
             listOf(Profiles.F8U, Profiles.S_ULTRA_8850, Profiles.S_ULTRA_8750, Profiles.S_8750, Profiles.FOLD7, Profiles.S_PLUS_8750,
                 Profiles.FOLD8, Profiles.S_8850, Profiles.S_8850_JP, Profiles.S_ULTRA_8650, Profiles.S_PLUS_8850,
-                Profiles.S_PLUS_9965, Profiles.FOLD6, Profiles.FLIP8),
+                Profiles.S_PLUS_9965, Profiles.FOLD6, Profiles.FLIP8, Profiles.S_9945),
             Profiles.BUILT_IN.filter { it.choice(Images.ID_NOTHING_METROID) != null },
         )
+        // Galaxy S24 (Exynos 2400): the Z Flip7's images plus Nothing OS, the Exynos and older-vendor notes.
+        val s24e = Profiles.S_9945
+        assertEquals(listOf("s-9945", "Galaxy S24 (Exynos)"), listOf(s24e.id, s24e.label))
+        assertEquals(listOf("SM-S921", "e1s", "s5e9945"), listOf(s24e.modelPrefix, s24e.codename, s24e.socModel))
+        assertEquals(FormFactor.BAR, s24e.form)
+        assertEquals(Profiles.FLIP7.choices + nothing, s24e.choices)
+        assertEquals(listOf(Profiles.ID_NOTE_EXYNOS, Profiles.ID_NOTE_OLDER_VENDOR), s24e.notes.map { it.id })
+        assertEquals(s24e, Profiles.resolve("SM-S921N", "e1s", "s5e9945").profile)
+        assertNull(Profiles.resolve("SM-S921U", "e1q", "SM8650").profile)
         // Galaxy S23 and S23+ (0.4.11): the X9U image, untested, with the will-most-likely-not-start note.
         val s23 = Profiles.S_8550
         val s23Plus = Profiles.S_PLUS_8550
@@ -240,7 +249,7 @@ class ProfilesTest {
                 Profiles.F8U, Profiles.S_ULTRA_8850, Profiles.S_ULTRA_8750, Profiles.S_8750, Profiles.FOLD7, Profiles.S_PLUS_8750, Profiles.FOLD8,
                 Profiles.S_8850, Profiles.S_8850_JP, Profiles.S_ULTRA_8650, Profiles.S_8550, Profiles.S_PLUS_8550, Profiles.S_PLUS_8850,
                 Profiles.S_PLUS_9965, Profiles.FLIP7, Profiles.A56, Profiles.A57, Profiles.FLIP5,
-                Profiles.FOLD6, Profiles.A07, Profiles.FLIP8, Profiles.A36, Profiles.FOLD5,
+                Profiles.FOLD6, Profiles.A07, Profiles.FLIP8, Profiles.A36, Profiles.FOLD5, Profiles.S_9945,
             ),
             Profiles.BUILT_IN,
         )
@@ -285,7 +294,7 @@ class ProfilesTest {
         assertEquals(
             listOf(
                 Profiles.S_ULTRA_8750, Profiles.S_8750, Profiles.S_PLUS_8750, Profiles.S_ULTRA_8650, Profiles.S_8550, Profiles.S_PLUS_8550,
-                Profiles.FLIP7, Profiles.A56, Profiles.A57, Profiles.FLIP5, Profiles.A36,
+                Profiles.FLIP7, Profiles.A56, Profiles.A57, Profiles.FLIP5, Profiles.A36, Profiles.S_9945,
             ),
             Profiles.BUILT_IN.filter { it.choice(Images.ID_PIXEL_KOMODO) != null },
         )

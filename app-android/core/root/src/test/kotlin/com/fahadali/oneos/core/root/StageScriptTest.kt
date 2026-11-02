@@ -908,6 +908,7 @@ class StageScriptTest {
             // 0.4.35: the Galaxy Z Flip8 and A36.
             Profiles.FLIP8 to "SM-F776B",
             Profiles.A36 to "SM-A366B",
+            Profiles.S_9945 to "SM-S921N",
         )) {
             eachShell { fr ->
                 fr.props["ro.product.model"] = model

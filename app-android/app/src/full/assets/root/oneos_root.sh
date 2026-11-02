@@ -172,6 +172,7 @@ profile_info() {
         a07) echo "SM-A075 a07 MT6789 bar" ;;
         flip8) echo "SM-F776 b8s s5e9965 flip" ;;
         a36) echo "SM-A366 a36xq SM6475 bar" ;;
+        s-9945) echo "SM-S921 e1s s5e9945 bar" ;;
         *) return 1 ;;
     esac
 }
@@ -296,6 +297,12 @@ profile_set() {
         "f5 coloros17-findn6") echo n6-f8u ;;
         "f5 infinityx41-findx9u") echo infinityx ;;
         "a07 infinityx41-findx9u") echo infinityx ;;
+        "s-9945 coloros17-findx9u-in") echo x9u-in-sultra ;;
+        "s-9945 coloros17-findx9u") echo x9u-sultra ;;
+        "s-9945 pixel9proxl-komodo") echo pixel9-sultra ;;
+        "s-9945 infinityx41-findx9u") echo infinityx ;;
+        "s-9945 hyperos-lhasa") echo hyper-f8u ;;
+        "s-9945 nothingos5-metroid") echo nothing-f8u ;;
         *) return 1 ;;
     esac
 }

@@ -101,6 +101,7 @@ object Profiles {
     const val ID_FLIP8 = "flip8"
     const val ID_A36 = "a36"
     const val ID_FOLD5 = "f5"
+    const val ID_S_9945 = "s-9945"
 
     /** The SM8750 and SM8650 phones' note ([PhoneProfile.notes]) and its [Finding.reason]. */
     const val ID_NOTE_OLDER_VENDOR = "profile-vendor-older"
@@ -680,10 +681,33 @@ object Profiles {
         notes = listOf(olderVendor("33 (Android 13)", "5.15")),
     )
 
+    /**
+     * Galaxy S24 with Exynos: a probe report of 2026-11-02 (SM-S921N, e1s,
+     * s5e9945 Exynos 2400 on platform erd9945, One UI 9.0, Android 17 build
+     * CP2A.260605.016, vendor API 34 and kernel 6.1 like the S24 Ultra, one
+     * 1080 x 2340 panel on port 195 at density 480, sec_touchscreen, backlight
+     * /sys/class/backlight/panel (max 12750, brightnessMaximum 5),
+     * vendor.hwcomposer-3 with composer3, Samsung's Bluetooth audio HAL,
+     * init.vendor.sysfw.rc, SVE and SVE2 but no SME, installd table identical to
+     * host_installd.txt). The Z Flip7's images (no SME there either) plus
+     * Nothing OS, whose brightness range fits this panel; untested, with
+     * [EXYNOS] and the S24 Ultra's older-vendor note.
+     */
+    val S_9945 = PhoneProfile(
+        id = ID_S_9945,
+        label = "Galaxy S24 (Exynos)",
+        modelPrefix = "SM-S921",
+        codename = "e1s",
+        socModel = "s5e9945",
+        form = FormFactor.BAR,
+        choices = listOf(X9U_IN_CHOICE, ImageChoice(Images.ID_FIND_X9U, PackageSets.ID_X9U_SULTRA, tested = false), PIXEL9_CHOICE, INFINITYX_CHOICE, HYPEROS_CHOICE, NOTHING_CHOICE),
+        notes = listOf(EXYNOS, olderVendor("34 (Android 14)", "6.1")),
+    )
+
     val BUILT_IN: List<PhoneProfile> = listOf(
         F8U, S_ULTRA_8850, S_ULTRA_8750, S_8750, FOLD7, S_PLUS_8750, FOLD8,
         S_8850, S_8850_JP, S_ULTRA_8650, S_8550, S_PLUS_8550, S_PLUS_8850,
-        S_PLUS_9965, FLIP7, A56, A57, FLIP5, FOLD6, A07, FLIP8, A36, FOLD5,
+        S_PLUS_9965, FLIP7, A56, A57, FLIP5, FOLD6, A07, FLIP8, A36, FOLD5, S_9945,
     )
 
     /** `ro.build.version.oneui` values seen on profiled phones (all One UI 9.0). */
