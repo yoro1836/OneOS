@@ -528,6 +528,10 @@ if [ "${ONEOS_LOGCAT:-1}" = 1 ]; then
         LOGCAT_HEAD=1
         echo "Logcat capture: $LOGS/boot.log"
     fi
+    # A kernel panic drops what the page cache holds: the S24 lost every log
+    # line after the first 90 s (e4cc7f63: NUL-filled tails). Flush every 10 s
+    # while the capture runs.
+    $BB setsid sh -c "while pgrep -f '^logcat .*$LOGS/boot.log' >/dev/null; do sleep 10; sync; done" </dev/null >/dev/null 2>&1 &
 fi
 
 # --- GAP SPLASH ---
