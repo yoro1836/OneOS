@@ -315,7 +315,13 @@ class SystemsFragment : Fragment() {
         }
         // Home offers "Set up {system}" only while nothing is set up; else that button is on this card.
         val st = StageCheck.state.result?.status
-        if (st?.ours == true || PrepareJob.state.busy) redraw(force = true) else SystemsNav.home(a)
+        when {
+            PrepareJob.state.busy -> redraw(force = true)
+            // Another system is set up: Home has no "Set up" for this one, so
+            // picking the file used to do nothing visible. Ask here instead.
+            st?.ours == true -> { redraw(force = true); FixActions.run(a, FixAction.SET_UP, good) }
+            else -> SystemsNav.home(a)
+        }
     }
 
     private fun badPick(a: SystemsActivity, p: PhoneProfile, id: ImageIdentity, cardId: String?) {
