@@ -38,9 +38,15 @@ WeWaffles, and builds its guest images with
 
 ## Status
 
-App version 0.4.37. Samsung flagships with Snapdragon, plus the first five
+App version 0.4.38. Samsung flagships with Snapdragon, plus the first five
 Exynos phones and (0.4.33) the first MediaTek phone; root is required (tested with KernelSU; Magisk and APatch are
 detected but untested).
+
+The app now uses an adaptive SESL9 card picker, a new OneOS icon, dedicated
+setup/update and pre-boot checks, and optional verbose entry/return screens.
+See the [UI gallery](docs/app/redesign-gallery.md) for Fold8 cover and inner
+screen screenshots, and [boot handoff notes](docs/boot-status.md) for the
+display lifecycle and release packaging requirements.
 
 Where each system has actually started, on our phones and on testers' (One UI
 9 throughout). What they reported working, item by item, is in
@@ -94,6 +100,12 @@ Snapdragon 8 Gen 3) with the Find N6 build and Infinity-X, and the Galaxy A07
 (SM-A075, MediaTek MT6789, One UI 9), the first MediaTek phone, with Infinity-X
 only. The Galaxy A16 and A17 on One UI 8.5 (Android 16) are not supported yet:
 every system here is Android 17.
+
+New in 0.4.38: **HyperOS starts on the Galaxy S23, S24 Ultra and Z Flip5**
+(Xiaomi's SurfaceFlinger read those screens' display mode groups as a single
+byte, found no mode and stopped at the first frame), and **Magisk** works as
+the root app (OneOS looked for its prop tool only where KernelSU and APatch
+keep theirs). Samsung Camera saves photos on a phone's first session with it.
 
 New in 0.4.37: **the camera in ColorOS and HyperOS.** Every camera app was
 refused on the S25, S26 and A phones: ColorOS sent One UI's camera service the

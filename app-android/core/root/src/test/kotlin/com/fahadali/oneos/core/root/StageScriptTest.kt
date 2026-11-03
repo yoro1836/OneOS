@@ -16,6 +16,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Test
+import org.junit.runner.RunWith
 import java.io.File
 
 /**
@@ -24,6 +25,7 @@ import java.io.File
  * fake root folder (FakeRoot): the whole preparation, and the refusals, each
  * of which must leave the stage exactly as it was.
  */
+@RunWith(ParallelMethods::class)
 class StageScriptTest {
     private val shells = TestShell.available()
 
@@ -88,8 +90,8 @@ class StageScriptTest {
 
         fun launch(
             mode: String = "session", hideGms: String = "0", code: String = this.code,
-            heatCap: String = "1", secIms: String = "0", edmStub: String = "0",
-        ) = fr.run(RootScript.Verb.LAUNCH, mode, code, "0123456789abcdef", hideGms, heatCap, secIms, edmStub)
+            heatCap: String = "1", secIms: String = "0", edmStub: String = "0", verboseBoot: String = "0",
+        ) = fr.run(RootScript.Verb.LAUNCH, mode, code, "0123456789abcdef", hideGms, heatCap, secIms, edmStub, verboseBoot)
 
         fun prepare(mode: String = "new") {
             ok(begin(mode))
@@ -776,6 +778,10 @@ class StageScriptTest {
             File(fr.stage, n).delete()
         }
         refused(n6.launch(), "test root: every launch check passed")
+        // The watchdog feeder guest_prepare.sh wrote, still running after an in-place return, is not a leftover.
+        File(fr.stage, "oneos_wdog_feeder.sh").writeText("while true; do sleep 2; done\n")
+        refused(n6.launch(), "test root: every launch check passed")
+        File(fr.stage, "oneos_wdog_feeder.sh").delete()
         // Once the Pixel system has guest data, keeping it for the Find N6 image is refused; moved aside it stays whole.
         pixel.prepare("keep")
         File(fr.stage, "data/system").mkdirs()
@@ -859,7 +865,7 @@ class StageScriptTest {
         refused(fr.run(RootScript.Verb.BEGIN, "keep", "s-plus-8750", Images.ID_FIND_N6, PackageSets.ID_N6_F8U, "4"), "does not run coloros17-findn6")
     }
 
-    /** 0.4.10: the Galaxy Z Fold8 (SM-F971, h8q, SM8850) takes the Fold's two images, the Find N6 one with its own set (0.4.14), and only on itself. */
+    /** 0.4.10: the Galaxy Z Fold8 (SM-F971, h8q, SM8850) takes the Fold's two images, the Find N6 one (the Folds' set since 0.4.38), and only on itself. */
     @Test
     fun galaxyZFold8TakesTheFoldSets() = eachShell { fr ->
         fr.props["ro.product.model"] = "SM-F971B"
@@ -867,12 +873,12 @@ class StageScriptTest {
         fr.props["ro.soc.model"] = "SM8850"
         fr.writeProps()
         val n6 = Stager(fr, Profiles.FOLD8)
-        // 0.4.14 (pull request #1): the Find N6 image with its own set, n6-f8.
-        assertEquals(PackageSets.N6_F8, n6.set)
+        // 0.4.38: the Find N6 global image with the Folds' set (n6-f8 was the CN build's).
+        assertEquals(PackageSets.N6_F8U, n6.set)
         n6.prepare()
         val marker = StageMarker.parse(File(fr.stage, StageMarker.FILE_NAME).readText())!!
-        assertEquals(listOf("f8", PackageSets.ID_N6_F8), listOf(marker.profileId, marker.setId))
-        for (name in PackageSets.N6_F8.names) assertTrue(name, File(fr.stage, name).isFile)
+        assertEquals(listOf("f8", PackageSets.ID_N6_F8U), listOf(marker.profileId, marker.setId))
+        for (name in PackageSets.N6_F8U.names) assertTrue(name, File(fr.stage, name).isFile)
         refused(n6.launch(), "test root: every launch check passed")
         val pixel = Stager(fr, Profiles.FOLD8, Images.ID_PIXEL_YOGI)
         assertEquals(PackageSets.PIXEL_F8, pixel.set)
@@ -1436,6 +1442,48 @@ class StageScriptTest {
         assertTrue(File(fr.stage, "bin/oneos_root.sh").isFile)
         assertTrue(java.nio.file.Files.isSymbolicLink(fr.legacy.toPath()))
         assertTrue(other.list()!!.isEmpty())
+    }
+
+    @Test
+    fun verboseBootChoiceIsWrittenOnlyAfterLaunchChecks() = eachShell { fr ->
+        val s = Stager(fr)
+        s.prepare()
+        val env = File(fr.stage, "session.env")
+        refused(s.launch(verboseBoot = "1"), "test root: every launch check passed")
+        assertTrue(env.readLines().contains("ONEOS_VERBOSE_BOOT=1"))
+        refused(s.launch(), "test root: every launch check passed")
+        assertTrue(env.readLines().contains("ONEOS_VERBOSE_BOOT=0"))
+        val before = env.readText()
+        org.junit.Assert.assertThrows(IllegalArgumentException::class.java) { s.launch(verboseBoot = "2") }
+        assertEquals(before, env.readText())
+        assertTrue(RootScript.problems(RootScript.Verb.LAUNCH, listOf("session", "4", "0123456789abcdef", "0", "1", "0", "0", "1;reboot")).isNotEmpty())
+    }
+
+    @Test
+    fun interruptedUpdateRetainsItsIdentityAndDataThroughRepeatedRetries() = eachShell { fr ->
+        val s = Stager(fr)
+        s.prepare()
+        val guestData = File(fr.stage, "data/kept-apps").apply { parentFile.mkdirs(); writeText("user apps and settings") }
+        val origin = File(fr.stage, ".oneos_stage").readText()
+        s.ok(s.begin("keep"))
+        assertEquals(origin, File(fr.stage, ".oneos_update").readText())
+        assertFalse(File(fr.stage, ".oneos_stage").exists())
+        refused(s.launch(), "update did not finish")
+        // Each verb uses a fresh shell, like retrying after process death or reboot.
+        s.ok(s.begin("keep"))
+        assertEquals(origin, File(fr.stage, ".oneos_update").readText())
+        assertEquals("user apps and settings", guestData.readText())
+        for (name in s.files.keys) s.ok(s.receive(name))
+        val rawIdentity = File(fr.stage, "system.raw").let { java.nio.file.Files.getAttribute(it.toPath(), "unix:ino") }
+        s.ok(fr.run(RootScript.Verb.KEEP_RAW, s.raw.size.toString(), Hashes.sha256(s.raw)))
+        assertEquals(rawIdentity, java.nio.file.Files.getAttribute(File(fr.stage, "system.raw").toPath(), "unix:ino"))
+        s.ok(s.table())
+        s.ok(s.env())
+        s.ok(s.finish())
+        assertFalse(File(fr.stage, ".oneos_update").exists())
+        assertTrue(File(fr.stage, ".oneos_stage").isFile)
+        assertEquals("user apps and settings", guestData.readText())
+        refused(s.launch(), "test root: every launch check passed")
     }
 
     @Test

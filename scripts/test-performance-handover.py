@@ -146,5 +146,71 @@ perf_worker
 [ ! -f "$PSTATE/released" ]
 ''')
 
+    def test_non_fold8_profiles_use_supported_backend_without_policy6(self):
+        self.run_case('''
+selected() { return 1; }
+BASE=$(dirname "$STAGE")
+mv "$BASE/sys/devices/system/cpu/cpufreq/policy6" "$BASE/sys/devices/system/cpu/cpufreq/policy4"
+timeout() {
+ if [ "$2" = settings ]; then echo 0; else
+  echo 'Current temperatures from HAL:'
+  echo 'Temperature{mValue=35.0, mType=3, mName=SKIN, mStatus=0}'
+  echo 'Current cooling devices'
+ fi
+}
+perf_snapshot host
+perf_guest() { echo 123; }
+sleep() { touch "$PSTATE/stop"; }
+perf_worker
+[ -f "$PSTATE/released" ]
+grep -q 'requested policy4=4742400' "$STAGE/performance_handover.log"
+''')
+
+    def test_exynos_uses_samsung_gpu_table_in_its_own_unit(self):
+        self.run_case('''
+BASE=$(dirname "$STAGE")
+rm "$BASE/sys/class/kgsl/kgsl-3d0/gpu_available_frequencies"
+echo 1050000 > "$BASE/sys/kernel/gpu/gpu_max_clock"
+echo '1300000 1050000 826000 646000 160000' > "$BASE/sys/kernel/gpu/gpu_freq_table"
+perf_supported
+[ "$(gpu_max)" = 1300000 ]
+timeout() {
+ if [ ! -f "$PSTATE/first-read" ]; then
+  touch "$PSTATE/first-read"
+  echo 'Current temperatures from HAL:'
+  echo 'Temperature{mValue=35.0, mType=3, mName=SKIN, mStatus=0}'
+  echo 'Current cooling devices'
+ fi
+}
+sleep() {
+ if [ -f "$PSTATE/slept" ]; then touch "$PSTATE/stop"; else touch "$PSTATE/slept"; fi
+}
+perf_snapshot live
+perf_guest() { echo 123; }
+perf_worker
+grep -q 'requested gpu=1300000' "$STAGE/performance_handover.log"
+grep -q 'requested gpu=646000' "$STAGE/performance_handover.log"
+perf_restore
+G=$BASE/sys/kernel/gpu/gpu_max_clock
+[ "$(cat "$G")" = 1050000 ]
+''')
+
+    def test_no_gpu_table_skips_backend(self):
+        self.run_case('''
+BASE=$(dirname "$STAGE")
+rm "$BASE/sys/class/kgsl/kgsl-3d0/gpu_available_frequencies"
+if perf_supported; then exit 1; fi
+''')
+
+    def test_missing_gpu_controls_skip_backend_without_snapshot(self):
+        self.run_case('''
+BASE=$(dirname "$STAGE")
+rm "$BASE/sys/kernel/gpu/gpu_max_clock"
+if perf_supported; then exit 1; fi
+perf_snapshot host
+perf_worker
+[ ! -e "$STAGE/performance_handover/boot" ]
+''')
+
 if __name__ == '__main__':
     unittest.main()

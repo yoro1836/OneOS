@@ -92,6 +92,8 @@ data class StageStatus(
     val props: Map<String, String>,
     /** 0.4.30: the system each copy OneOS moved aside holds (oneos.old-<time> to its marker's image id). */
     val oldImages: Map<String, String> = emptyMap(),
+    /** Last installed identity while an update is incomplete; never a prepared/bootable marker. */
+    val pendingUpdate: StageMarker? = null,
 ) {
     val exists: Boolean get() = kind != StageKind.ABSENT
 
@@ -151,7 +153,7 @@ data class StageStatus(
      * build's /data. Null for the same image, no guest data, or no image yet.
      */
     fun otherImageData(imageId: String?): String? =
-        marker?.imageId?.takeIf { ours && guest != GuestData.NONE && imageId != null && it != imageId }
+        (marker?.takeIf { ours } ?: pendingUpdate?.takeIf { partial })?.imageId?.takeIf { guest != GuestData.NONE && imageId != null && it != imageId }
 
     /** OneOS's own session never returned (a hard reset): its persist snapshot must be restored first. */
     val unfinishedSession: Boolean
@@ -200,15 +202,16 @@ data class StageStatus(
      * not complete or could not read the mount table (fail closed). The files
      * count as verified only for the image and set the marker names ([staged]).
      */
-    fun stageState(profile: PhoneProfile?): StageState? {
+    fun stageState(profile: PhoneProfile?, expectedHashes: Map<String, String>? = null): StageState? {
         if (!complete || !mountinfoRead) return null
         val staged = staged(profile)
         return StageState(
             mounts = mounts,
             activeBridges = bridges,
             sessionActive = sessionActive,
-            marker = if (ours) marker else null,
-            filesVerified = profile != null && staged != null && verify(profile, staged.first, staged.second).isEmpty(),
+            marker = if (ours) marker else pendingUpdate?.takeIf { partial },
+            filesVerified = profile != null && staged != null && verify(profile, staged.first, staged.second).isEmpty() &&
+                (expectedHashes == null || (expectedHashes.isNotEmpty() && expectedHashes.all { (name, sha) -> hashes[name] == sha })),
             unfinishedSession = unfinishedSession,
         )
     }
@@ -242,7 +245,7 @@ data class StageStatus(
         (sums.entries.keys - want.toSet()).forEach { p += "files.sha256 lists $it" }
         for (e in entries) {
             if (e.type == 'd' || e.name.contains('/')) continue
-            if (LEFTOVER.matches(e.name) && e.name !in want) p += "${e.name} is in the stage but was not prepared"
+            if (LEFTOVER.matches(e.name) && e.name !in want && e.name !in RUNTIME) p += "${e.name} is in the stage but was not prepared"
         }
         val id = rawId
         when {
@@ -268,6 +271,9 @@ data class StageStatus(
          * root's check_files list, with the Pixel set's oneos-telephony.jar and .sha256 (0.3.7).
          */
         val LEFTOVER = Regex("""^(.*_patched.*|.*_payload\.img|.*\.apk|.*\.jar|.*\.so|.*\.sh|.*\.tar|Fold8AngleRelay\.dex|zygote_exec|oneos_btaudio|socket_exec|clean_apex_info_list\.xml|oneos-.*)$""")
+
+        /** Written into the stage by the session itself (guest_prepare.sh's watchdog feeder, still running after an in-place return). */
+        val RUNTIME = setOf("oneos_wdog_feeder.sh")
 
         /** The list's entry ids and their output files. */
         val OUTPUTS: Map<String, String> = linkedMapOf(
@@ -368,7 +374,8 @@ data class StageStatus(
                 mode = dir.getOrNull(3),
                 entries = entries,
                 markerText = markerText,
-                marker = markerText?.let(StageMarker::parse),
+                marker = markerText?.takeUnless { it.startsWith("updating\n") }?.let(StageMarker::parse),
+                pendingUpdate = markerText?.takeIf { it.startsWith("updating\n") }?.removePrefix("updating\n")?.let(StageMarker::parse),
                 sumsText = out("stage.sums"),
                 hashes = hashes,
                 rawSize = rawSize,
