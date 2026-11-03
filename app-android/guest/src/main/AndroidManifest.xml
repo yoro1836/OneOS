@@ -3,9 +3,12 @@
 
     <!-- OneOS inside the guest: "Back to One UI". No permission at all: the
          request is a file in the app's own data folder, which the session's
-         watcher on the host reads (switcher/assets/oneos_switch.sh). -->
+         watcher on the host reads (switcher/assets/oneos_switch.sh).
+         Software drawing: on the S24's Infinity-X, HWUI's Vulkan pipeline
+         crashed in SkCanvas::internalQuickReject on its first frame. -->
     <application
         android:enableOnBackInvokedCallback="true"
+        android:hardwareAccelerated="false"
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"

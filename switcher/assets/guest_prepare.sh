@@ -485,6 +485,24 @@ sec_ims_stage() {
 # reject an overlay with more than one lower dir (mount ... : Invalid argument).
 # Only empty mount points are created in the overlay's tmpfs upper; the content
 # stays on the staged copy. The return path unmounts every mount under the stage.
+# Empty mount points for sec_ims_bind under the overlay layer $1 (the
+# read-only form, which takes no new files once mounted).
+secims_mountpoints() {
+    local d f
+    mkdir -p "$1/priv-app/OneOSSecIms" || return 1
+    for d in framework lib64 etc etc/permissions; do
+        [ -d "$SECIMS/$d" ] || continue
+        mkdir -p "$1/$d" || return 1
+        for f in "$SECIMS/$d"/*; do
+            [ -f "$f" ] || continue
+            [ -e "$GUEST_SYSTEM_EXT/$d/${f##*/}" ] || : > "$1/$d/${f##*/}" || return 1
+        done
+    done
+    find "$1" -type d -exec chmod 755 {} + 2>/dev/null
+    $BB chcon -R u:object_r:system_file:s0 "$1" 2>/dev/null || true
+    [ -d "$1/lib64" ] && $BB chcon -R u:object_r:system_lib_file:s0 "$1/lib64" 2>/dev/null
+    return 0
+}
 sec_ims_bind() {
     local gse="$GUEST_SYSTEM_EXT" n=0 f t d
     mkdir -p "$gse/priv-app/OneOSSecIms" || return 1
@@ -917,6 +935,12 @@ if { [ -d /system_ext/apex ] && [ -d "$GUEST_SYSTEM_EXT" ]; } || [ $INJ = 1 ] ||
             $BB chcon u:object_r:system_file:s0 "$OV/up/bin" 2>/dev/null || true
             $BB chcon u:object_r:hwservicemanager_exec:s0 "$OV/up/bin/hwservicemanager" 2>/dev/null || true
         fi
+        # The read-only form cannot take new files later: the Samsung IMS set's
+        # mount points go into its tmpfs layer first, as Samsung Camera's do.
+        if [ $INJ = 1 ] && [ $SEC_IMS = 1 ] && ! secims_mountpoints "$OV/up"; then
+            SEC_IMS=0; rm -f "$STAGE/data/oneos_sec_ims"
+            echo "Samsung IMS in the guest: off (no room for its mount points on the overlay's tmpfs)"
+        fi
         if [ $INJ = 1 ]; then
             mkdir -p "$OV/up/framework" && cp "$STAGE/oneos-telephony.jar" "$OV/up/framework/" &&
                 chmod 755 "$OV/up" "$OV/up/framework" && chmod 644 "$OV/up/framework/oneos-telephony.jar"
@@ -924,6 +948,12 @@ if { [ -d /system_ext/apex ] && [ -d "$GUEST_SYSTEM_EXT" ]; } || [ $INJ = 1 ] ||
             $BB chcon u:object_r:system_file:s0 "$OV/up/framework" "$OV/up/framework/oneos-telephony.jar" 2>/dev/null || true
             if $BB mount -t overlay overlay -o "ro,lowerdir=$OV/up:$GUEST_SYSTEM_EXT" "$GUEST_SYSTEM_EXT"; then
                 echo "Read-only overlay on $GUEST_SYSTEM_EXT (apex mount point, framework/oneos-telephony.jar)"
+                if [ $SEC_IMS = 1 ]; then
+                    if sec_ims_bind; then SECIMS_BOUND=1; else
+                        SEC_IMS=0; rm -f "$STAGE/data/oneos_sec_ims"
+                        echo "Samsung IMS in the guest: off (bind-mount onto the read-only $GUEST_SYSTEM_EXT failed)"
+                    fi
+                fi
             else
                 # The apex mount point matters more: today's rw form then.
                 INJ=0
