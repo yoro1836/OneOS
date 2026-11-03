@@ -2222,9 +2222,6 @@ echo "Screen recording: $([ -f "$STAGE/data/oneos_record" ] && echo on || echo o
 # rejects frames. ONEOS_GUEST_HWC=0|1 overrides either default.
 HWC_DEF=1
 { [ -e "$ROOTFS/system/framework/oplus-services.jar" ] || [ -L "$ROOTFS/system/framework/oplus-services.jar" ]; } && HWC_DEF=0
-# Exynos: Samsung's composer has no Qualcomm extension client to reject, and
-# GPU composition (ANGLE on Xclipse) left the S24's panel black.
-case "$(getprop ro.soc.model)" in s5e*) HWC_DEF=1 ;; esac
 if [ "${ONEOS_GUEST_HWC:-$HWC_DEF}" = 1 ]; then touch "$STAGE/data/oneos_hwc"; else rm -f "$STAGE/data/oneos_hwc"; fi
 echo "Guest HW overlays: $([ -f "$STAGE/data/oneos_hwc" ] && echo 'on (GPU composition forced only if the composer rejects frames)' || echo 'off (GPU composition)')"
 

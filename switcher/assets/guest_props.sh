@@ -766,6 +766,19 @@ add)
         echo "$key=$h" >> "$OVR" && "$RP" -n "$key" false 2>/dev/null &&
             echo "guest_props: $key=false for the session (the guest never drives One UI's composd)"
     fi
+    # Exynos: an AOSP surfaceflinger on SkiaGL (ANGLE on Xclipse) left the
+    # S24's panel black (Infinity-X, 423aa23d) while ColorOS's, on SkiaVk, drew
+    # (2090f542). Vulkan RenderEngine for the session unless the guest sets
+    # one; ONEOS_GUEST_RE_BACKEND overrides (empty: leave it).
+    key=debug.renderengine.backend
+    case "$(getprop ro.soc.model)" in
+        s5e*)
+            want=${ONEOS_GUEST_RE_BACKEND-skiavkthreaded}
+            if [ -n "$want" ] && [ -z "$(getprop "$key")" ] && ! grep -q "^$key=" "$ROOTFS"/system/build.prop "$ROOTFS"/system/product/etc/build.prop "$ROOTFS"/system/system_ext/etc/build.prop 2>/dev/null; then
+                "$RP" -n "$key" "$want" 2>/dev/null && echo "$key" >> "$ADDED" &&
+                    echo "guest_props: $key=$want for the session (Exynos: SkiaGL on ANGLE drew a black panel)"
+            fi ;;
+    esac
     ;;
 remove)
     # Host values add overrode for the session (blur, sound names, audio HAL
