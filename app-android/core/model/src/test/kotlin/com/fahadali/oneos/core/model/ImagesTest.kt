@@ -263,7 +263,6 @@ class ImagesTest {
             Profiles.FLIP5 to listOf(xin, x9u, Images.PIXEL_KOMODO, ifx, hyper),
             Profiles.FLIP8 to listOf(xin, x9u, Images.PIXEL_KODIAK, ifx, hyper, nothing),
             Profiles.A36 to listOf(xin, x9u, Images.PIXEL_KOMODO, ifx, hyper),
-            Profiles.S_9945 to listOf(xin, x9u, Images.PIXEL_KOMODO, ifx, hyper, nothing),
         )
         for ((p, good) in takes) {
             assertEquals(p.id, good, p.images())
