@@ -1169,6 +1169,19 @@ if in_image /system_ext/framework/nt-telephony-common.jar || in_image /system/sy
     echo "built $OUT/OneOSBrightnessRange.apk (One UI's brightness range)"
 fi
 
+# Auto brightness for the S24 (switcher/overlays/samsung_auto_brightness);
+# guest_prepare.sh installs it for that profile only.
+AB_RRO="$ROOT/switcher/overlays/samsung_auto_brightness"
+"$BT/aapt2" compile --dir "$AB_RRO/res" -o "$WORK/ab.zip"
+"$BT/aapt2" link -o "$WORK/ab.apk" -I "$AJ" --manifest "$AB_RRO/AndroidManifest.xml" \
+    --min-sdk-version 35 --target-sdk-version 36 --no-resource-deduping "$WORK/ab.zip"
+"$BT/zipalign" -p -f 4 "$WORK/ab.apk" "$WORK/ab-aligned.apk"
+"$BT/apksigner" sign --ks "${KEYSTORE:-$HOME/.android/debug.keystore}" \
+    --ks-pass pass:android --ks-key-alias androiddebugkey --key-pass pass:android \
+    --out "$OUT/OneOSAutoBrightness.apk" "$WORK/ab-aligned.apk"
+rm -f "$OUT/OneOSAutoBrightness.apk.idsig"
+echo "built $OUT/OneOSAutoBrightness.apk (auto brightness, S24)"
+
 # Essential Space from a double press of power (switcher/overlays/
 # nothing_essential_key), for an image with Nothing's Essential Space.
 NE_RRO="$ROOT/switcher/overlays/nothing_essential_key"

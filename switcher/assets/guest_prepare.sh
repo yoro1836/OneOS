@@ -1717,6 +1717,18 @@ if [ -f "$STAGE/OneOSBrightnessRange.apk" ] && [ -f "$GUEST_SYSTEM_EXT/framework
         chmod 755 "$STAGE/oem" "$STAGE/oem/overlay" && chmod 644 "$STAGE/oem/overlay/OneOSBrightnessRange.apk" &&
         OEM_FILES="$OEM_FILES overlay/OneOSBrightnessRange.apk"
 fi
+# Auto brightness on the S24 (switcher/overlays/samsung_auto_brightness): an
+# AOSP image built for another phone (Infinity-X for the Find X9 Ultra) has it
+# off and no nits table, though the light sensor is the host's and works. The
+# curve is in Samsung backlight units, so the S24 profile only.
+# ONEOS_GUEST_AUTO_BRIGHTNESS=0 leaves it out.
+if [ -f "$STAGE/OneOSAutoBrightness.apk" ] && [ "${ONEOS_PROFILE:-}" = s-9945 ] &&
+   [ "${ONEOS_GUEST_AUTO_BRIGHTNESS:-1}" = 1 ]; then
+    mkdir -p "$STAGE/oem/overlay" &&
+        cp "$STAGE/OneOSAutoBrightness.apk" "$STAGE/oem/overlay/" &&
+        chmod 755 "$STAGE/oem" "$STAGE/oem/overlay" && chmod 644 "$STAGE/oem/overlay/OneOSAutoBrightness.apk" &&
+        OEM_FILES="$OEM_FILES overlay/OneOSAutoBrightness.apk"
+fi
 # Essential Space from a double press of the power key, for a Nothing image
 # (switcher/overlays/nothing_essential_key): Nothing opens it with its own
 # Essential key, which no Galaxy has. Any phone; the double-tap camera gesture
