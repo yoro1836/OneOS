@@ -119,6 +119,9 @@ val sessionScripts: Map<String, File> = linkedMapOf(
     // so every image gets it without rebuilding one. oneos_switch.sh runs it only
     // when ONEOS_GUEST_EDM_STUB=1.
     "OneOSEdmStub.dex" to File(repoRoot, "switcher/assets/OneOSEdmStub.dex"),
+    // S24 fork: an empty com.ims.dm for Samsung IMS on Korean SIMs
+    // (switcher/patches/build_ims_dm_stub.sh); installed with Samsung IMS only.
+    "OneOSImsDmStub.apk" to File(repoRoot, "switcher/assets/OneOSImsDmStub.apk"),
     // 0.4.33: Android's Bluetooth audio factory over Samsung's on the phones that
     // only have Samsung's (switcher/native/oneos_btaudio.cpp, built by build.sh).
     // oneos_switch.sh starts it only on such a phone.
