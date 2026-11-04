@@ -1750,6 +1750,10 @@ while true; do
                         [ \"\$st\" = LOADED ] || continue
                         \$G /system/bin/am broadcast -a android.intent.action.ISIM_LOADED --ei phone \$s >/dev/null 2>&1
                         echo \"[UI Activator] Samsung IMS: slot \$s ISIM_LOADED sent (after a \$w s wait)\"
+                        # com.ims.dm's push is what made One UI's IMS re-read its DM
+                        # settings (the P-CSCF list) and register; the same notice here.
+                        \$G /system/bin/content insert --uri 'content://com.samsung.rcs.dmconfigurationprovider/omadm/#simslot'\$s --bind INTERNAL_KEY_PROCESS_NAME:s:com.ims.dm --bind ./3GPP_IMS/LBO_P-CSCF_Address/LBO_P-CSCF_Address_6/AddressType:s: >/dev/null 2>&1
+                        echo \"[UI Activator] Samsung IMS: slot \$s DM update sent, P-CSCF 1 set: \$(\$G /system/bin/content query --uri 'content://com.samsung.rcs.dmconfigurationprovider/omadm/./3GPP_IMS/LBO_P-CSCF_Address/LBO_P-CSCF_Address_1/Address#simslot'\$s 2>&1 | grep -c '=[0-9\\[]')\"
                     done
                 done ) &
             else

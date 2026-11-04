@@ -2440,6 +2440,30 @@ if [ -f "$STAGE/data/system/packages.list" ]; then
     done < "$STAGE/data/system/packages.list"
 fi
 echo "App data dirs realigned to their package uids: $realigned"
+# Samsung IMS's carrier settings (OMA-DM: the P-CSCF list, codecs, timers)
+# live in its own databases, filled by One UI's DM agent com.ims.dm, which the
+# guest does not run. On a fresh guest the list was empty and IMS never sent a
+# REGISTER (S24 LG U+, d5bd8019: "regi failed due to empty p-cscf"; One UI
+# registered 1 s after com.ims.dm pushed it). So the guest's copy is One UI's,
+# taken at every prepare: same app, same SIM.
+if [ $SEC_IMS = 1 ]; then
+    n=0
+    for b in user/0 user_de/0; do
+        src="/data/$b/com.sec.imsservice"; dst="$STAGE/data/$b/com.sec.imsservice"
+        [ -d "$src" ] || continue
+        no_symlink "$b/com.sec.imsservice"
+        for sub in databases shared_prefs; do
+            [ -d "$src/$sub" ] || continue
+            [ -L "$dst/$sub" ] && continue
+            rm -rf "$dst/$sub" && mkdir -p "$dst/$sub" && cp "$src/$sub"/* "$dst/$sub/" 2>/dev/null &&
+                n=$((n + $(ls "$dst/$sub" | wc -l)))
+        done
+        [ -d "$dst" ] || continue
+        chown -h -R 1000:1000 "$dst" && chmod 0700 "$dst"
+        $BB chcon -h -R u:object_r:system_app_data_file:s0 "$dst" 2>/dev/null || true
+    done
+    echo "Samsung IMS in the guest: One UI's IMS settings copied ($n files)"
+fi
 # Profiles: installd recreates them with the owners it expects.
 rm -rf "$STAGE/data/misc/profiles/cur/0/"* "$STAGE/data/misc/profiles/ref/"* 2>/dev/null
 
