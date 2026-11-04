@@ -49,7 +49,7 @@ class PackageSetsTest {
         val ifx = PackageSets.INFINITYX
         assertEquals(Images.ID_INFINITYX, ifx.imageId)
         assertEquals("out/overlays_infinityx_r3", ifx.sourceDir)
-        assertEquals(34, ifx.files.size)
+        assertEquals(35, ifx.files.size)
         // 0.4.33: the status bar's corner padding, as on the Pixel images.
         assertTrue(ifx.file("OneOSPixelStatusBar.apk")?.role == FileRole.RRO)
         assertEquals(21, ifx.files.count { it.role == FileRole.APEX_PAYLOAD })

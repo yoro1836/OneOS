@@ -404,6 +404,8 @@ object PackageSets {
             PackageFile(GUEST_APP, FileRole.GUEST_APP),
             // 0.4.33: the status bar's corner padding, as on the Pixel images (r2).
             PackageFile("OneOSPixelStatusBar.apk", FileRole.RRO),
+            // S24 fork: auto brightness, installed on the s-9945 profile only.
+            PackageFile("OneOSAutoBrightness.apk", FileRole.RRO),
         ) + (COMMON_PAYLOADS + listOf("bt", "nfcservices", "telephonycore", "conscrypt", "profiling", "gmssystem"))
             .map { PackageFile("${it}_payload.img", FileRole.APEX_PAYLOAD) },
         omitted = listOf(TETHERING, CELLBROADCAST),
