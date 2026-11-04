@@ -739,7 +739,10 @@ do_begin() {
                     refuse "the stage holds another system's guest data ($dfam), not $B_IMAGE's: move the stage aside"
             fi
             if [ "$ours" = 0 ]; then
-                if grep -q -s -F "org.lineageos." "$STAGE/data/system/packages.xml"; then
+                # Infinity-X is built on LineageOS: its own data has
+                # org.lineageos packages (a retried update has no marker yet).
+                if grep -q -s -F "org.lineageos." "$STAGE/data/system/packages.xml" &&
+                   { [ "$(data_family)" != infinityx ] || [ "$(image_family "$B_IMAGE" 2>/dev/null)" != infinityx ]; }; then
                     refuse "the stage holds LineageOS data, not $B_IMAGE's: move it aside"
                 fi
                 # Never trust another stage's persist snapshot (it could
