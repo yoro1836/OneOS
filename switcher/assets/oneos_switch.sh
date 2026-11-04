@@ -1956,6 +1956,11 @@ while true; do
                         \$G /system/bin/content insert --uri 'content://com.samsung.rcs.dmconfigurationprovider/omadm/#simslot'\$s --bind INTERNAL_KEY_PROCESS_NAME:s:com.ims.dm --bind ./3GPP_IMS/LBO_P-CSCF_Address/LBO_P-CSCF_Address_6/AddressType:s: >/dev/null 2>&1
                         echo \"[UI Activator] Samsung IMS: slot \$s DM update sent, P-CSCF 1 set: \$(\$G /system/bin/content query --uri 'content://com.samsung.rcs.dmconfigurationprovider/omadm/./3GPP_IMS/LBO_P-CSCF_Address/LBO_P-CSCF_Address_1/Address#simslot'\$s 2>&1 | grep -c '=[0-9\\[]')\"
                     done
+                # What IMS made of it, after each wait: this log survives a late
+                # export, the logcat capture may have rotated it away (bb776348).
+                echo \"[UI Activator] Samsung IMS: state after the \$w s wait\"
+                \$G /system/bin/content query --uri 'content://com.samsung.rcs.dmconfigurationprovider/omadm/./3GPP_IMS/LBO_P-CSCF_Address/LBO_P-CSCF_Address_1/Address#simslot0' 2>&1 | head -2 | tr -d '\\r' | sed 's/[0-9a-f]*[.:][0-9a-f.:]*[0-9a-f]/<addr>/g; s/^/[UI Activator] Samsung IMS: DM query: /'
+                \$G /system/bin/logcat -d 2>/dev/null | grep -a -E '#IMSREGI|EMPTY_PCSCF|DM pcscf|getPcscfAddress|isOmadm|DmConfigModule|ImsSettingsProvider: Insert|SipResp' | tail -40 | cut -c1-200 | sed 's/^/[UI Activator] Samsung IMS log: /'
                 done ) &
             else
                 # Samsung IMS off: the device setting overlay of an earlier session goes.
