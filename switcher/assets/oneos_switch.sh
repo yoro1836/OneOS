@@ -1393,6 +1393,11 @@ rm -f "$STAGE/data/oneos_edm_stub.dex"
 if [ -f "$STAGE/OneOSEdmStub.dex" ] && [ ! -L "$STAGE/OneOSEdmStub.dex" ]; then
     cp -f "$STAGE/OneOSEdmStub.dex" "$STAGE/data/oneos_edm_stub.dex" && chmod 644 "$STAGE/data/oneos_edm_stub.dex"
 fi
+# The com.ims.dm stand-in the UI activator installs with Samsung IMS (S24 fork).
+rm -f "$STAGE/data/oneos_ims_dm_stub.apk"
+if [ -f "$STAGE/OneOSImsDmStub.apk" ] && [ ! -L "$STAGE/OneOSImsDmStub.apk" ]; then
+    cp -f "$STAGE/OneOSImsDmStub.apk" "$STAGE/data/oneos_ims_dm_stub.apk" && chmod 644 "$STAGE/data/oneos_ims_dm_stub.apk"
+fi
 # The dimension overlay helper the UI activator runs in the guest (0.4.33).
 rm -f "$STAGE/data/oneos_overlay_dimen.dex"
 if [ -f "$STAGE/OneOSOverlayDimen.dex" ] && [ ! -L "$STAGE/OneOSOverlayDimen.dex" ]; then
@@ -1715,6 +1720,15 @@ while true; do
                 # ImsResolver reads it at start. Each step and what is bound, logged.
                 G=\"timeout 10 $BB nsenter -t \$PID -m /system/bin/sh /data/oneos_genv.sh\"
                 ims_bound() { \$G /system/bin/cmd phone ims get-ims-service -s \$1 -d -f 1 2>&1 | tr -d '\\r' | tail -1; }
+                # Korean SIMs: Samsung IMS takes the DM P-CSCF list only after DM config
+                # completes or times out, and waits for it only when com.ims.dm exists
+                # (RegistrationGovernorKor.isOmadmConfigAvailable). One UI's agent is
+                # android.uid.system; an empty app of that name gets IMS the timeout
+                # path, which reads the DM settings guest_prepare.sh copied (959381b8:
+                # \"DM Package not found\", empty P-CSCF, no REGISTER).
+                if [ -f $STAGE/data/oneos_ims_dm_stub.apk ] && [ -z \"\$(\$G /system/bin/pm path com.ims.dm 2>/dev/null)\" ]; then
+                    echo \"[UI Activator] Samsung IMS: com.ims.dm stand-in: \$(timeout 60 $BB nsenter -t \$PID -m /system/bin/sh /data/oneos_genv.sh /system/bin/pm install --user 0 /data/oneos_ims_dm_stub.apk 2>&1 | tail -n 1)\"
+                fi
                 SB=0
                 for s in 0 1; do
                     echo \"[UI Activator] Samsung IMS: slot \$s override: \$(\$G /system/bin/cmd phone ims set-ims-service -s \$s -d -f 0,1 com.sec.imsservice 2>&1 | tr '\\n' ' ' | cut -c1-120)\"
@@ -1750,16 +1764,12 @@ while true; do
                         [ \"\$st\" = LOADED ] || continue
                         \$G /system/bin/am broadcast -a android.intent.action.ISIM_LOADED --ei phone \$s >/dev/null 2>&1
                         echo \"[UI Activator] Samsung IMS: slot \$s ISIM_LOADED sent (after a \$w s wait)\"
-                        # com.ims.dm's push is what made One UI's IMS re-read its DM
-                        # settings (the P-CSCF list) and register; the same notice here.
-                        \$G /system/bin/content insert --uri 'content://com.samsung.rcs.dmconfigurationprovider/omadm/#simslot'\$s --bind INTERNAL_KEY_PROCESS_NAME:s:com.ims.dm --bind ./3GPP_IMS/LBO_P-CSCF_Address/LBO_P-CSCF_Address_6/AddressType:s: >/dev/null 2>&1
-                        echo \"[UI Activator] Samsung IMS: slot \$s DM update sent, P-CSCF 1 set: \$(\$G /system/bin/content query --uri 'content://com.samsung.rcs.dmconfigurationprovider/omadm/./3GPP_IMS/LBO_P-CSCF_Address/LBO_P-CSCF_Address_1/Address#simslot'\$s 2>&1 | grep -c '=[0-9\\[]')\"
                     done
                 # What IMS made of it, after each wait: this log survives a late
                 # export, the logcat capture may have rotated it away (bb776348).
                 echo \"[UI Activator] Samsung IMS: state after the \$w s wait\"
                 \$G /system/bin/content query --uri 'content://com.samsung.rcs.dmconfigurationprovider/omadm/./3GPP_IMS/LBO_P-CSCF_Address/LBO_P-CSCF_Address_1/Address#simslot0' 2>&1 | head -2 | tr -d '\\r' | sed 's/[0-9a-f]*[.:][0-9a-f.:]*[0-9a-f]/<addr>/g; s/^/[UI Activator] Samsung IMS: DM query: /'
-                \$G /system/bin/logcat -d 2>/dev/null | grep -a -E '#IMSREGI|EMPTY_PCSCF|DM pcscf|getPcscfAddress|isOmadm|DmConfigModule|ImsSettingsProvider: Insert|SipResp' | tail -40 | cut -c1-200 | sed 's/^/[UI Activator] Samsung IMS log: /'
+                \$G /system/bin/logcat -d 2>/dev/null | grep -a -E '#IMSREGI|EMPTY_PCSCF|DM pcscf|getPcscfAddress|isOmadm|triggerOmadm|onDmConfigCompleted|SipResp' | tail -40 | cut -c1-200 | sed 's/^/[UI Activator] Samsung IMS log: /'
                 done ) &
             else
                 # Samsung IMS off: the device setting overlay of an earlier session goes.
