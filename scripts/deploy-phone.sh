@@ -110,7 +110,7 @@ fi
 adb_ shell "mkdir -p $INCOMING"
 # The session's other files: helpers the scripts run (the app ships the same
 # list, sessionScripts in app/build.gradle.kts).
-HELPERS="OneOSBootStatus.dex oneos_boot_icon.png zygote_exec OneOSEdmStub.dex oneos_btaudio OneOSOverlayDimen.dex"
+HELPERS="OneOSBootStatus.dex oneos_boot_icon.png zygote_exec OneOSEdmStub.dex OneOSImsDmStub.apk oneos_btaudio OneOSOverlayDimen.dex"
 adb_ push "$ROOT"/switcher/assets/*.sh $(for h in $HELPERS; do printf "%s " "$ROOT/switcher/assets/$h"; done) "$INCOMING/"
 # The stage's names up to 0.3.6 become the OneOS ones before anything is
 # pushed into the stage (scripts/stage-migrate.sh, run as root on the phone).

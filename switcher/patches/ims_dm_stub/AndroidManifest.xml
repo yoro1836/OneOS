@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Stand-in for One UI's IMS DM agent (com.ims.dm) in the guest; see build_ims_dm_stub.sh. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.ims.dm" android:versionCode="1" android:versionName="oneos-stub">
+    <uses-sdk android:minSdkVersion="30" android:targetSdkVersion="36"/>
+    <application android:hasCode="false" android:label="IMS DM (OneOS)"/>
+</manifest>
