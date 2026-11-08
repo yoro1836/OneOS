@@ -151,7 +151,9 @@ add)
             # /data/apex/decompressed under the APEXes One UI had mounted
             # (dm-verity I/O errors, SIGBUS in the One UI package parser,
             # boot loop). No apostrophes in here: this is a quoted awk script.
-            if (key ~ /^(persist\.)?(apexd|ro\.apex|ro\.boot|ro\.bootimage|ro\.crypto|ro\.hardware|ro\.vndk|ro\.zygote|init|vold|ro\.vold|sys\.usb|persist\.sys\.usb|ro\.adb|ro\.debuggable|ro\.secure|selinux|ro\.build\.selinux|ro\.kernel|ro\.dalvik\.vm\.native\.bridge)\./) next
+            # rild: the phone radio daemon reads vendor.rild.libpath when it
+            # (re)starts; vivo OriginOS (MediaTek) sets mtk-ril.so.
+            if (key ~ /^(persist\.)?(apexd|ro\.apex|ro\.boot|ro\.bootimage|ro\.crypto|ro\.hardware|ro\.vndk|ro\.zygote|init|vold|ro\.vold|sys\.usb|persist\.sys\.usb|ro\.adb|ro\.debuggable|ro\.secure|selinux|ro\.build\.selinux|ro\.kernel|ro\.dalvik\.vm\.native\.bridge|vendor\.rild|rild|ro\.vendor\.rild)\./) next
             if (key ~ /^(apexd|ro\.apex|init|vold|selinux)$/) next
             # Key attestation reports these as the device identity (KeyMint
             # checks them against the phone): always the phone values, never
@@ -185,6 +187,57 @@ add)
         elif ! grep -q "^$BLUR=" "$NEW"; then
             echo "$BLUR=1" >> "$NEW"
         fi
+    fi
+    # ColorOS's animation level. OPPO's launcher turns its material blur on
+    # only when persist.sys.oplus.anim_level is a valid level
+    # (PlatformLevelUtils ii.l.h(): 1-4): the app drawer needs level 1
+    # (BlurUtils.isSupportDrawerBlur, ii.l.g(1)), folder and card blur 1 or 2
+    # (isMaterialBlurJumpSupported, via OplusBlurProperties.isSupportNewBlur).
+    # Nothing in the guest sets it (no build.prop the add above loads, One UI
+    # neither): the launcher logged "animationLevelOS14 = -1" (0.4.40
+    # b9110fc3, 0.4.55 4933a41d), CardBackgroundBlurManager supportBlur=false
+    # even after the material blur switch was turned on, and BlurService only
+    # ever blurred the shade. 1 = the top level (A+). ColorOS only: Infinity-X
+    # also ships oplus-services.jar but has no oplus-telephony-common.jar.
+    # Memory only and in the added list, so remove blanks it again.
+    # ONEOS_GUEST_ANIM_LEVEL=0 leaves it unset; 2, 3 or 4 sets that level.
+    AL=persist.sys.oplus.anim_level; ALV=${ONEOS_GUEST_ANIM_LEVEL:-1}
+    case "$ALV" in 1|2|3|4) ;; *) ALV="" ;; esac
+    if [ -n "$ALV" ] && [ -f "$GSE/framework/oplus-telephony-common.jar" ] &&
+            [ -e "$ROOTFS/system/framework/oplus-services.jar" ] &&
+            ! grep -qxF "$AL" "$HOST" && ! grep -q '^persist\.sys\.oplus\.anim_level=' "$NEW"; then
+        echo "$AL=$ALV" >> "$NEW"
+        echo "guest_props: $AL=$ALV for the session (ColorOS launcher material blur level)"
+    fi
+    # One UI's color mode (oneos_switch.sh, host_color_mode), read by the
+    # guest's SurfaceFlinger at start: it no longer moves the panels between
+    # SRGB and DISPLAY_P3 with what is on screen (Pixel, session 9455098f: a
+    # flash on each switch). Memory only and in the added list, like the
+    # others. ONEOS_GUEST_COLOR_MODE=0 leaves the guest's own choice; a number
+    # forces that mode.
+    CM=persist.sys.sf.color_mode; CMV=${ONEOS_GUEST_COLOR_MODE:-$(cat "$STAGE/host_color_mode" 2>/dev/null)}
+    case "$CMV" in [1-9]|[1-9][0-9]) ;; *) CMV="" ;; esac
+    if [ -n "$CMV" ] && ! grep -qxF "$CM" "$HOST" && ! grep -q '^persist\.sys\.sf\.color_mode=' "$NEW"; then
+        echo "$CM=$CMV" >> "$NEW"
+        echo "guest_props: $CM=$CMV for the session (One UI's color mode)"
+    fi
+    # The boot animation on the panel that is on. AOSP's bootanimation draws on
+    # the first display persist.service.bootanim.displays lists, at that
+    # display's size, else on SurfaceFlinger's primary: a Fold's inner panel.
+    # Switched while folded, Pixel played it on the dark inner panel and the
+    # cover stayed black until Home (Z Fold8 Ultra, 2026-11-06). Folded (the
+    # inner backlight at 0, the cover's lit): the cover's id from
+    # host_cover_display. Memory only and in the added list, like the others.
+    # ONEOS_GUEST_BOOTANIM_COVER=0 leaves it on the primary.
+    BAD=persist.service.bootanim.displays
+    CVID=$(sed -n 's/^local:\([0-9][0-9]*\) .*/\1/p' "$STAGE/host_cover_display" 2>/dev/null)
+    BL0=/sys/class/backlight/panel0-backlight; BL1=/sys/class/backlight/panel1-backlight
+    [ -d "$BL0" ] || { BL0=/sys/class/backlight/panel; BL1=/sys/class/backlight/panel1; }
+    if [ "${ONEOS_GUEST_BOOTANIM_COVER:-1}" = 1 ] && [ -n "$CVID" ] &&
+            [ "$(cat "$BL0/brightness" 2>/dev/null)" = 0 ] && [ "$(cat "$BL1/brightness" 2>/dev/null || echo 0)" != 0 ] &&
+            ! grep -qxF "$BAD" "$HOST" && ! grep -q '^persist\.service\.bootanim\.displays=' "$NEW"; then
+        echo "$BAD=$CVID" >> "$NEW"
+        echo "guest_props: $BAD=$CVID for the session (folded: the boot animation on the cover)"
     fi
     # USB functions AOSP does not define. Samsung's persist.sys.usb.config is
     # "sec_charging,adb"; UsbManager.usbFunctionsFromString knows no
@@ -375,10 +428,14 @@ add)
     # Bar phones: the image's hole is its own phone's, compared raw with this
     # panel's width (isHoleType: left < width/2 < right is HOLE_CENTER_TYPE).
     # The S25 got the Find X9 Ultra's 679,40:762,123 on 1080 px: HOLE_RIGHT,
-    # icons ended next to the camera. This phone's hole as One UI reported it
-    # (oneos_switch.sh, host_screenhole); unread = no hole, icons at the
-    # right edge. Top and bottom only pad the icons vertically
-    # (StatusBarPaddingProvider.updatePaddingTopBottom).
+    # icons ended next to the camera. This phone's lens as the switch worked it
+    # out from One UI's cutout (oneos_switch.sh, host_holes/host_screenhole);
+    # unread = no hole, icons at the right edge. ColorOS takes it for the lens
+    # itself: StatusBarPaddingProvider.updatePaddingTopBottom centres the icons
+    # between its top and bottom, and the capsule (SystemUIPlugin) is its
+    # height + 4 dp, centred on it. One UI's own rect from the top edge (S25
+    # Ultra 685,0:755,128) made a 139 px capsule on a 128 px bar (report
+    # 4933a41d), and below QHD+ an Ultra's rect was 3/4 size (695,0:747,96).
     # ONEOS_GUEST_INNER_HOLE=image keeps the image's value here too.
     if [ "${ONEOS_GUEST_FORM:-fold}" != fold ] && [ "${ONEOS_GUEST_INNER_HOLE:-none}" = none ] &&
         grep -q '^ro\.oplus\.display\.screenhole\.positon=' "$NEW"; then
@@ -583,18 +640,39 @@ add)
             echo "guest_props: $key=0 for the session (no first-boot clock reset to 1 January)"
         fi
     fi
-    # Galaxy Z Fold8, Find N6 (pull request #1): the image's cover camera bounds are the
-    # Find N6's; this cover is 1248 px wide. Session-only, removed on return.
-    if [ "${ONEOS_PROFILE:-}" = f8 ] &&
-       grep -q '^  "image": "coloros17-findn6",$' "$STAGE/.oneos_stage"; then
-        key=ro.oplus.display.secondary.screenhole.position
-        sed -i "/^$key=/d" "$NEW"
-        # The accepted bar is 48dp =126px at density420. Centre the
-        # captured camera rectangle vertically in it, preserving its size/X.
-        h=$(cat "$STAGE/host_screenhole" 2>/dev/null || true)
-        aligned=$(echo "$h" | awk -F '[:,]' 'NF==4 && $1~/^[0-9]+$/ && $2~/^[0-9]+$/ && $3~/^[0-9]+$/ && $4~/^[0-9]+$/ && $3>$1 && $4>$2 && $4-$2<=126 {top=int((126-($4-$2))/2);printf "%d,%d:%d,%d",$1,top,$3,top+$4-$2}')
-        [ -n "$aligned" ] || aligned=589,11:659,115
-        echo "$key=$aligned" >> "$NEW"
+    # Fold cover screens: the image's cover hole is its own phone's (Find N6:
+    # 534..606), and ColorOS reads it while oplus_system_folding_mode is not 1
+    # (OplusStatusBarUtils.getScreenHoleParam). On the Z Fold5's 904 px cover
+    # that is right of the middle: HOLE_RIGHT_TYPE, the icons ended at the real
+    # camera, 423..482 (report 4efbf1e8: "isHoleType stableDisplayWidth: 904,
+    # holeLeftPosition 534,holeRightPosition 606 ,holeType HOLE_RIGHT_TYPE",
+    # paddingResult (51, 402)). Only the Z Fold8 had its own (pull request #1).
+    # This cover's lens, from One UI's cover cutout (oneos_switch.sh,
+    # host_cover_screenhole). The Z Fold8 keeps pull request #1's rule, which
+    # was accepted on that phone: One UI's cover rect (host_holes) centred in
+    # ColorOS's 48 dp = 126 px cover bar, its size and x kept; 589,11:659,115
+    # when it was not read. Session-only, removed on return.
+    # ONEOS_GUEST_COVER_HOLE=image keeps the image's value.
+    key=ro.oplus.display.secondary.screenhole.position
+    if [ "${ONEOS_GUEST_FORM:-fold}" = fold ] && [ "${ONEOS_GUEST_COVER_HOLE:-host}" != image ] &&
+       grep -q '^ro\.oplus\.display\.' "$NEW"; then
+        h=$(cat "$STAGE/host_cover_screenhole" 2>/dev/null) what="this cover's lens"
+        if [ "${ONEOS_PROFILE:-}" = f8 ] && grep -q '^  "image": "coloros17-findn6",$' "$STAGE/.oneos_stage"; then
+            r=$(sed -n 's/^cover [^ ]* [0-9]* \([0-9]*,[0-9]*:[0-9]*,[0-9]*\) .*/\1/p' "$STAGE/host_holes" 2>/dev/null | head -n 1)
+            h=$(echo "$r" | awk -F '[:,]' 'NF==4 && $1~/^[0-9]+$/ && $2~/^[0-9]+$/ && $3~/^[0-9]+$/ && $4~/^[0-9]+$/ && $3>$1 && $4>$2 && $4-$2<=126 {top=int((126-($4-$2))/2);printf "%d,%d:%d,%d",$1,top,$3,top+$4-$2}')
+            what="the Z Fold8's rule from pull request #1, One UI's cover rect ${r:-not read}"
+            [ -n "$h" ] || h=589,11:659,115
+        elif ! echo "$h" | grep -qx '[0-9]\{1,5\},[0-9]\{1,5\}:[0-9]\{1,5\},[0-9]\{1,5\}'; then
+            h='' what=''
+        fi
+        if [ -n "$h" ]; then
+            was=$(sed -n "s/^$key=//p" "$NEW" | tail -n 1)
+            sed -i "/^$key=/d" "$NEW"
+            echo "$key=$h" >> "$NEW"
+            echo "guest_props: $key=$h for the session ($what; the image's: ${was:-none})"
+        else
+            echo "guest_props: $key kept (the image's; this cover's lens was not read)"
+        fi
     fi
     # Nothing OS: haptics through the phone's own vibrator. Nothing's feature
     # bit 139 (bits from ro.build.nothing.feature.base, flipped by the diff
@@ -638,6 +716,20 @@ add)
             echo "guest_props: log.tag=I for this debug session"
         fi
     fi
+    # vivo OriginOS: each vivo feature lookup in zygote (android.util.FtFeature
+    # through VivoConfigStorePropertyHelper) first waits up to 11 x 50 ms for
+    # vendor.vivoconfigstore.ready, which vivo's vendor config store sets
+    # ("vivoconfigstore is not ready , wait 50ms again"). Samsung's vendor has
+    # none, so every lookup cost 550 ms. Set for the session when One UI has no
+    # such key: the features then read as unsupported at once, as they would
+    # after the wait (their ro.vendor.<feature>:vivo-support props are vivo's
+    # vendor's). ONEOS_GUEST_VIVO_CFG=0 leaves it out.
+    if [ -f "$ROOTFS/system/framework/vivo-services.jar" ] && [ "${ONEOS_GUEST_VIVO_CFG:-1}" = 1 ] &&
+       [ -z "$(getprop vendor.vivoconfigstore.ready)" ]; then
+        sed -i '/^vendor\.vivoconfigstore\.ready=/d' "$NEW"
+        echo "vendor.vivoconfigstore.ready=1" >> "$NEW"
+        echo "guest_props: vendor.vivoconfigstore.ready=1 (no 550 ms wait per vivo feature lookup)"
+    fi
     # Nothing OS's ringtones: NothingGenerateRingtoneService composes each with a
     # Glyph pattern from libgenerative_glyph, which sizes it by Nothing's vendor
     # props (ro.vendor.glyph.*, the Phone (3)'s 25 x 25 matrix). Samsung's
@@ -673,7 +765,6 @@ add)
             SM8550) cpu="8 Gen 2" ;;
             s5e9965) cpu="Exynos 2600" ;;
             s5e9955) cpu="Exynos 2500" ;;
-            s5e9945) cpu="Exynos 2400" ;;
             *) cpu="" ;;
         esac
         # The Folds' overlay says "Qualcomm Snapdragon %s"; every other phone's
@@ -754,11 +845,20 @@ add)
     # stops One UI's zygote_secondary, yet with One UI's ABI lists its
     # system_server asked for a 32-bit zygote: ZygoteProcess.bootCompleted
     # threw "Failed to inform zygote of boot_completed" and took it down
-    # (1f4f0c7f, 0.4.18). The image's own lists for the session.
-    if [ ! -e "$ROOTFS/system/bin/app_process32" ] && [ -n "$(getprop ro.product.cpu.abilist32)" ]; then
+    # (1f4f0c7f, 0.4.18). The image's own lists for the session. 0.4.40: also when
+    # the image has app_process32 (HyperOS, with Xiaomi's lazily started 32-bit
+    # zygote): no guest gets a 32-bit zygote from OneOS, whatever its image ships.
+    if [ -n "$(getprop ro.product.cpu.abilist32)" ]; then
+        # A key the image's build.prop does not name (HyperOS: 0.4.40 S23 2d486da1 and
+        # S23 Ultra c70e1b54 reached the lock screen, then the same boot_completed
+        # crash; the loop skipped every key) gets the 64-bit-only value.
+        g64=$(sed -n "s/^ro.system.product.cpu.abilist64=//p" "$ROOTFS/system/build.prop" 2>/dev/null | tail -n 1)
         for key in ro.product.cpu.abilist ro.product.cpu.abilist32 ro.system.product.cpu.abilist ro.system.product.cpu.abilist32; do
-            grep -q "^$key=" "$ROOTFS/system/build.prop" 2>/dev/null || continue
-            g=$(sed -n "s/^$key=//p" "$ROOTFS/system/build.prop" | tail -n 1)
+            if grep -q "^$key=" "$ROOTFS/system/build.prop" 2>/dev/null; then
+                g=$(sed -n "s/^$key=//p" "$ROOTFS/system/build.prop" | tail -n 1)
+            else
+                case "$key" in *32) g="" ;; *) g=${g64:-arm64-v8a} ;; esac
+            fi
             h=$(getprop "$key")
             [ "$g" != "$h" ] || continue
             echo "$key=$h" >> "$OVR" && "$RP" -n "$key" "$g" 2>/dev/null &&
@@ -795,19 +895,6 @@ add)
         echo "$key=$h" >> "$OVR" && "$RP" -n "$key" false 2>/dev/null &&
             echo "guest_props: $key=false for the session (the guest never drives One UI's composd)"
     fi
-    # Exynos: an AOSP surfaceflinger on SkiaGL (ANGLE on Xclipse) left the
-    # S24's panel black (Infinity-X, 423aa23d) while ColorOS's, on SkiaVk, drew
-    # (2090f542). Vulkan RenderEngine for the session unless the guest sets
-    # one; ONEOS_GUEST_RE_BACKEND overrides (empty: leave it).
-    key=debug.renderengine.backend
-    case "$(getprop ro.soc.model)" in
-        s5e*)
-            want=${ONEOS_GUEST_RE_BACKEND-skiavkthreaded}
-            if [ -n "$want" ] && [ -z "$(getprop "$key")" ] && ! grep -q "^$key=" "$ROOTFS"/system/build.prop "$ROOTFS"/system/product/etc/build.prop "$ROOTFS"/system/system_ext/etc/build.prop 2>/dev/null; then
-                "$RP" -n "$key" "$want" 2>/dev/null && echo "$key" >> "$ADDED" &&
-                    echo "guest_props: $key=$want for the session (Exynos: SkiaGL on ANGLE drew a black panel)"
-            fi ;;
-    esac
     ;;
 remove)
     # Host values add overrode for the session (blur, sound names, audio HAL

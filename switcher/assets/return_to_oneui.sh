@@ -27,9 +27,19 @@ S=/data/local/tmp/oneos
 # the persist snapshot).
 BASE=$S/inplace_base
 
-# One UI's block-backed /apex mounts ("maj:min mount point"), from init's table.
+# One UI's block-backed /apex mounts ("maj:min mount point"), from init's table:
+# the modules' own mount points, /apex/<module> and /apex/<module>@<version>. A
+# file a root tool binds deeper inside a module is not One UI's APEX: LSPosed
+# binds its dex2oat wrapper from /data over /apex/com.android.art/bin/dex2oat64
+# and dex2oat32, the session drops those binds, and counting them made every
+# return on an LSPosed phone a failsafe reboot (28 reports, 0.4.36 to 0.4.51).
 apex_mounts() {
-    "$BB" awk '$5 ~ /^\/apex\// && $3 !~ /^0:/ {print $3, $5}' /proc/1/mountinfo | "$BB" sort
+    "$BB" awk '$5 ~ /^\/apex\/[^\/]+$/ && $3 !~ /^0:/ {print $3, $5}' /proc/1/mountinfo | "$BB" sort
+}
+# Those deeper binds ("mount point, its path on the source filesystem"), only
+# logged: the ones gone at the return come back when their tool starts again.
+apex_overlays() {
+    "$BB" awk '$5 ~ /^\/apex\/[^\/]+\/./ {print $5, $4}' /proc/1/mountinfo | "$BB" sort
 }
 loop_line() {
     b=/sys/block/$1
@@ -74,10 +84,13 @@ if [ "$1" = baseline ]; then
     getprop > "$BASE/props"
     getenforce > "$BASE/selinux" 2>&1
     apex_state > "$BASE/apex"
+    apex_overlays > "$BASE/apex_overlays"
     ip rule show > "$BASE/iprule" 2>&1
     for f in /sys/fs/f2fs/*/gc_urgent; do [ -f "$f" ] && echo "$f $(cat "$f" 2>/dev/null)"; done > "$BASE/gc_urgent"
     for n in $HOST_NAMES; do p=$(svc_pid "$n"); echo "$n ${p:-none}"; done > "$BASE/svcpid"
     ls -lZ /dev/watchdog* > "$BASE/watchdog" 2>&1
+    # One UI's linker namespaces (a tmpfs the guest's tree binds), compared at the return.
+    "$BB" find /linkerconfig -type f -exec "$BB" sha256sum {} + > "$BASE/linkerconfig" 2>/dev/null
     # The kernel log from here on is scanned for I/O errors on these devices.
     m="oneos-baseline $(date +%s)"
     echo "$m" > /dev/kmsg 2>/dev/null && echo "$m" > "$BASE/kmsg"
@@ -112,7 +125,7 @@ if [ -f "$S/boot_status.sh" ]; then
 fi
 
 # The call keepers' logs (guest_start.sh: call_audio.log, audio_keeper.log;
-# HyperOS: hyos_spawner.log)
+# HyperOS: hyos_spawner.log; the double-tap keeper: dt2w.log)
 # next to the session's logcat capture (oneos_switch.sh), first, before anything
 # is stopped and on both return paths. Run 44: both calls came after diag_90 and
 # the reboot return leaves no diag_final, so the per-call keeper lines were in
@@ -120,7 +133,7 @@ fi
 # can fail the return.
 LOGS=/data/local/tmp/oneos_logs
 if [ -d "$LOGS" ] && [ ! -L "$LOGS" ]; then
-    for f in call_audio.log audio_keeper.log oneos_a2dp.log hyos_spawner.log; do
+    for f in call_audio.log audio_keeper.log oneos_a2dp.log hyos_spawner.log dt2w.log; do
         [ -f "$S/data/$f" ] && [ ! -L "$S/data/$f" ] || continue
         rm -f "$LOGS/$f" 2>/dev/null
         cp "$S/data/$f" "$LOGS/$f" 2>/dev/null
@@ -156,18 +169,44 @@ if [ -n "$BB" ] && [ -n "$gp" ] && [ ! -L "$DR" ] && rm -rf "$DR" 2>/dev/null &&
     p2=$!
     gd audio > "$DR/dumpsys_audio.txt" 2>&1 &
     p3=$!
+    # Location at the end too (S23 Ultra report 3c47928a: the user tried
+    # location after diag_90, in the part of the logcat the report no longer
+    # had): the providers' allowed state, every app's GPS and network requests
+    # and fixes over the session, and its event log. Only on a return with the
+    # guest's system_server still up (not after a hard reset, 4da6af47, or a
+    # dead guest, 16e735f2).
+    gd location > "$DR/location.txt" 2>&1 &
+    p4=$!
+    # Double tap to wake (Pixel on the Z Fold8 Ultra, 0.4.59 test: none). The
+    # guest's input devices (a touchscreen InputReader disables while its
+    # display is off) and what the touch ICs themselves logged in low-power
+    # mode over the session (their LP dump: the double taps they saw, if any).
+    gd input > "$DR/input.txt" 2>&1 &
+    p5=$!
+    # Hinge (same test: the inner screen came on only fully open, One UI's at
+    # half open): the guest's fold state and the hinge angles its sensor
+    # service last delivered (its recent-events list).
+    gd device_state > "$DR/device_state.txt" 2>&1 &
+    p6=$!
+    gd sensorservice | "$BB" grep -i -A 12 'hinge' > "$DR/sensor_hinge.txt" 2>&1 &
+    p7=$!
+    for t in /sys/class/sec/tsp*; do
+        [ -r "$t/get_lp_dump" ] || continue
+        echo "== $t (support_feature $(cat "$t/support_feature" 2>/dev/null))"
+        timeout 3 cat "$t/get_lp_dump" 2>&1
+    done > "$DR/tsp_lp_dump.txt" 2>&1
     { for k in bluetooth.sco.managed_by_audio persist.bluetooth.a2dp_offload.disabled ro.bluetooth.a2dp_offload.supported \
                persist.bluetooth.leaudio_offload.disabled ro.bluetooth.leaudio_offload.supported; do
           echo "$k=$(getprop "$k")"
       done
       echo "audio HAL pid: $(timeout 3 dumpsys --pid android.hardware.audio.core.IModule/default 2>/dev/null | head -n 1)"
     } > "$DR/bt_props.txt" 2>&1
-    wait $p1 $p2 $p3 2>/dev/null
-    echo "Guest Bluetooth and audio at the return (pid $gp's namespace): $(ls "$DR" 2>/dev/null | tr '\n' ' ')in $DR"
+    wait $p1 $p2 $p3 $p4 $p5 $p6 $p7 2>/dev/null
+    echo "Guest Bluetooth, audio and location at the return (pid $gp's namespace): $(ls "$DR" 2>/dev/null | tr '\n' ' ')in $DR"
 else
     why="no guest surfaceflinger or system_server"
     [ -n "$gp" ] && why="no busybox, or $DR not usable"
-    echo "Guest Bluetooth and audio at the return: not read ($why)"
+    echo "Guest Bluetooth, audio and location at the return: not read ($why)"
 fi
 
 echo "=== [1/4] Terminating Container Supervision & Zygote ==="
@@ -331,7 +370,7 @@ fi
 # staged app trees (installd/artd write there), and nothing may start One UI
 # on top of the guest's copies.
 # (Fallback if bridges.sh is gone; keep in step with it.)
-BRIDGES="app:app app-staging:app-staging user:user user_de:user_de dalvik-cache:dalvik-cache misc/profiles:misc/profiles data:user/0 media:media misc/user:misc/user misc_ce/0/sdksandbox:misc_ce/0/sdksandbox misc_de/0/sdksandbox:misc_de/0/sdksandbox misc_ce/0/rollback:misc_ce/0/rollback misc_de/0/rollback:misc_de/0/rollback resource-cache:resource-cache"
+BRIDGES="app:app app-staging:app-staging user:user user_de:user_de dalvik-cache:dalvik-cache misc/profiles:misc/profiles data:user/0 media:media misc/user:misc/user misc_ce/0/sdksandbox:misc_ce/0/sdksandbox misc_de/0/sdksandbox:misc_de/0/sdksandbox misc_ce/0/rollback:misc_ce/0/rollback misc_de/0/rollback:misc_de/0/rollback resource-cache:oneos_host_resource_cache"
 [ -f /data/local/tmp/oneos/bridges.sh ] && . /data/local/tmp/oneos/bridges.sh
 for pair in $BRIDGES; do
     d=${pair%%:*}
@@ -351,6 +390,21 @@ fi
 # OneOS: One UI Home's databases are no longer copied back here from
 # /data/local/tmp/lineage_backups (OneLineage's snapshot): that was the only
 # intended write into One UI's app data, and the switch no longer takes it.
+
+# A touchscreen the guest's double-tap keeper (guest_start.sh) left in
+# low-power mode (the guest ended with that panel off) comes back on, as the
+# keeper does when the panel lights: One UI writes its own display states once
+# it runs, but must not find its touchscreen asleep. Fixed names only.
+for t in tsp tsp1 tsp2; do
+    f=$S/data/oneos_dt2w_armed.$t
+    [ -f "$f" ] && [ ! -L "$f" ] || continue
+    if [ -w /sys/class/sec/$t/enabled ]; then
+        echo 2,0 > /sys/class/sec/$t/enabled; echo 2,1 > /sys/class/sec/$t/enabled
+        echo "Touchscreen $t: back from the guest's double-tap low-power mode (enabled=$(cat /sys/class/sec/$t/enabled 2>/dev/null))"
+    fi
+    rm -f "$f"
+done
+rm -f /dev/oneos_dt2w_event* 2>/dev/null
 
 # One UI's protected state against the record the switch made (see
 # oneos_switch.sh): every guest process is gone by now. Logged only.
@@ -570,10 +624,22 @@ for p in /proc/[0-9]*; do
         say "stage mounts in another mount namespace ($n, pid ${p##*/} $(cat "$p/comm" 2>/dev/null)): only $pv of $t could be made private, none unmounted there"
         continue
     fi
+    err=""
     for mp in $mps; do
-        "$BB" nsenter -t "${p##*/}" -m -- "$BB" umount -l "$mp" 2>/dev/null && u=$((u + 1))
+        e=$("$BB" nsenter -t "${p##*/}" -m -- "$BB" umount -l "$mp" 2>&1) && u=$((u + 1)) || err="${err:-$mp: $e}"
     done
     say "stage mounts in another mount namespace ($n, pid ${p##*/} $(cat "$p/comm" 2>/dev/null)): $t made private, $u of $t unmounted there"
+    # 0.4.50: who holds what stays (owner's Fold, 2026-11-04 22:02: a long-lived sh kept rootfs, proc and
+    # sys, and the failsafe below rebooted): the namespace's processes by name, parent, uid, and the
+    # first unmount error. Read from /proc only (no binder, no ps).
+    if [ $u != $t ]; then
+        say "  first unmount error there: $err"
+        for q in /proc/[0-9]*; do
+            [ "$(readlink "$q/ns/mnt" 2>/dev/null)" = "$n" ] || continue
+            pp=$("$BB" awk '/^PPid:/ {print $2}' "$q/status" 2>/dev/null)
+            say "  holder pid ${q##*/} $(cat "$q/comm" 2>/dev/null) uid $("$BB" awk '/^Uid:/ {print $2}' "$q/status" 2>/dev/null) parent ${pp:-?} $(cat "/proc/$pp/comm" 2>/dev/null) user ns $(readlink "$q/ns/user" 2>/dev/null)"
+        done
+    fi
 done
 [ $SEFS_BEFORE = 0 ] || [ -e /sys/fs/selinux/enforce ] || failsafe "/sys/fs/selinux is gone after the stage unmounts"
 # Nothing of the stage may stay mounted in any process's table (a namespace
@@ -622,6 +688,9 @@ if ! "$BB" cmp -s "$BASE/apex" "$S/inplace_apex.after"; then
     "$BB" diff "$BASE/apex" "$S/inplace_apex.after" >> "$IPLOG" 2>&1
     failsafe "One UI's APEX devices changed during the session (diff in return_inplace.log)"
 fi
+apex_overlays > "$S/inplace_apex_overlays.after"
+gone=$("$BB" awk 'FILENAME == ARGV[1] { now[$0] = 1; next } !($0 in now) { printf "%s ", $1 }' "$S/inplace_apex_overlays.after" "$BASE/apex_overlays" 2>/dev/null)
+[ -z "$gone" ] || say "files a root tool bound into One UI's APEX modules (LSPosed's dex2oat wrapper, for one) are gone since the switch: ${gone}until that tool starts again"
 DIRECT=0; "$BB" dd --help 2>&1 | "$BB" grep -q direct && DIRECT=1
 read_mb=0
 for d in $("$BB" awk '$1 == "dev" {print $3} $1 == "loop" {print $2}' "$BASE/apex" | "$BB" sort -u); do
@@ -682,7 +751,22 @@ done
 # Props before any One UI daemon reads them: the guest's own (added and
 # overridden ones), what the switch set, then persist.* from the snapshot.
 STAGE=$S /system/bin/sh $S/guest_props.sh remove >> "$IPLOG" 2>&1
-for k in ro.control_privapp_permissions sys.rescue_boot_count crashrecovery.rescue_boot_count \
+# One UI's boot-loop check (0.4.47): crash recovery counts every system_server start in
+# crashrecovery.rescue_boot_count within a 10 minute window (from crashrecovery.rescue_boot_start), and
+# after a mitigation (crashrecovery.boot_mitigation_*) a second start within the window is enough. The
+# guest's crash recovery writes the same properties, and every switch and in-place return starts a
+# system_server without a kernel boot: on the owner's Z Fold8 Ultra (2026-11-04, ColorOS) One UI's
+# rollback observer found UNKNOWN_BOOT_LOOP 4 s after the return, rolled back its Google Play system
+# update (ART, permission modules; on 11-01 tzdata) and rebooted the phone ("Rollback staged
+# install"). persist.sys.disable_rescue stops RescueParty, not the rollback observer. So the window
+# and mitigation state go back to the switch's and One UI's start counts as its first.
+for k in crashrecovery.rescue_boot_start crashrecovery.boot_mitigation_count crashrecovery.boot_mitigation_start \
+         crashrecovery.attempting_reboot crashrecovery.attempting_factory_reset; do
+    put_back "$k"
+done
+"$RP" -n sys.rescue_boot_count 0 2>/dev/null
+"$RP" -n crashrecovery.rescue_boot_count 0 2>/dev/null
+for k in ro.control_privapp_permissions \
          audio.offload.disable audio.deep_buffer.media audio.offload.video vendor.audio.offload.track.enable \
          service.bootanim.exit oneos.guest.powerctl; do
     put_back "$k"
@@ -743,6 +827,17 @@ for c in vendor.qti.hardware.display.composer vendor.hwcomposer-3; do
 done
 [ -n "$COMPOSER_SVC" ] || COMPOSER_SVC=$(getprop | "$BB" sed -n 's/^\[init\.svc\.\([^]]*\)\]: \[running\]$/\1/p' | "$BB" grep -m1 -E 'hwcomposer|display\.composer|graphics\.composer')
 [ -n "$COMPOSER_SVC" ] || failsafe "no display composer service found"
+# The Galaxy A36's Qualcomm composer could not start again at the return (0.4.55
+# 121e9be4, de8edca2, Infinity-X): "CANNOT LINK EXECUTABLE ... libui.so not found:
+# needed by /system/lib64/libnativewindow.so in namespace system", though it had
+# linked at boot. The guest's tree binds One UI's /linkerconfig itself; say
+# whether its files are still the ones of the switch (logged only, for now).
+if [ -s "$BASE/linkerconfig" ]; then
+    "$BB" find /linkerconfig -type f -exec "$BB" sha256sum {} + > "$BASE/linkerconfig.now" 2>/dev/null
+    LCD=$("$BB" awk 'NR == FNR { a[$2] = $1; next } a[$2] != $1 { print $2 } { delete a[$2] } END { for (f in a) print f " (gone)" }' \
+        "$BASE/linkerconfig" "$BASE/linkerconfig.now" | "$BB" tr '\n' ' ')
+    if [ -n "$LCD" ]; then say "!!! /linkerconfig changed since the switch: $LCD"; else say "/linkerconfig as at the switch"; fi
+fi
 oneos_boot_release_display
 setprop ctl.restart "$COMPOSER_SVC"
 # The SM8550 phones (Galaxy S23) have only the HIDL composer
@@ -858,7 +953,9 @@ fi
 # reboots after a few anyway, and RescueParty would reset One UI's settings.
 t=0; ss=""
 while [ $t -lt 60 ]; do
-    ss=$(pidof system_server); [ -n "$ss" ] && break
+    # Two pids: a child system_server forked and has not exec'd yet; ask again.
+    ss=$(pidof system_server); case "$ss" in *" "*) ss="" ;; esac
+    [ -n "$ss" ] && break
     sleep 1; t=$((t + 1))
 done
 [ -n "$ss" ] || failsafe "One UI's system_server did not start in 60 s"
@@ -866,8 +963,13 @@ say "One UI's system_server $ss"
 t=0; up=0
 while :; do
     sleep 2; t=$((t + 2))
-    now=$(pidof system_server)
-    [ "$now" = "$ss" ] || failsafe "One UI's system_server $ss died after ${t}s (now ${now:-none})"
+    # The pid's own name, not pidof's list: a child system_server forks is named
+    # system_server too until it execs, and "now 9787 25148" with 9787 alive was
+    # a failsafe reboot for nothing (0.4.51 report e6a54d95, and 0.4.31).
+    if [ "$("$BB" cat /proc/$ss/comm 2>/dev/null)" != system_server ]; then
+        now=$(pidof system_server)
+        failsafe "One UI's system_server $ss died after ${t}s (now ${now:-none})"
+    fi
     [ "$(getprop init.svc.zygote)" = running ] || failsafe "zygote is $(getprop init.svc.zygote)"
     if [ $up = 0 ]; then
         st=$(timeout 5 am get-started-user-state 0 2>&1)
@@ -896,6 +998,15 @@ if [ -n "$v" ]; then "$RP" -n persist.sys.disable_rescue "$v" 2>/dev/null; else 
 # started 78 s after a return, and this stop ended its capture 40 s into it,
 # with no logcat of the session at all.
 if [ -d "$LOGS" ] && [ ! -L "$LOGS" ]; then
+    # The Play Store and Google sign-in lines of the session (store_watch.log,
+    # collected with the stage logs: installs, downloads, sign-in steps, Play
+    # Integrity requests; report 9455098f), taken once from this capture three
+    # minutes after the return, at the lowest priority, 2 MiB at most. Until
+    # test build 6 a logcat -e watch took them live at 65% of a core.
+    ONEOS_RE='IQ: Notifying installation update|IV2: (Rejecting|request install failure)|cannot process install request|Unauthenticated delivery|Cannot get valid account|Unauth not supported|No current account found|INSTALL_FAILED|installation completed for package|Commit of session|Download failed|DS: .*(error|fail)|setKeyAttestationCheckFailed|finishCalled for ControlledActivity, resultCode|AccountManager notifies account update|Device is now provisioned|requestExpressIntegrityToken|requestIntegrityToken|Integrity key attestation|no longer exists|account is null|Cached accounts updated|No account for auth token|IV2: Task Failed|Refreshing user settings' ONEOS_L="$LOGS" ONEOS_S="$S" "$BB" sh -c '
+        sleep 180
+        cd "$ONEOS_L" || exit 0
+        nice -n 19 grep -h -E -e "$ONEOS_RE" $(ls -tr boot.log* 2>/dev/null) 2>/dev/null | head -c 2097152 > "$ONEOS_S/store_watch.log"' </dev/null >/dev/null 2>&1 &
     STOP_TOKEN="$(date +%s).$$"
     echo "$STOP_TOKEN" > "$LOGS/logcat.stop" 2>/dev/null
     "$BB" sh -c "sleep 600; [ \"\$(cat $LOGS/logcat.stop 2>/dev/null)\" = $STOP_TOKEN ] || exit 0; rm -f $LOGS/logcat.stop; pkill -f '^logcat .*/data/local/tmp/oneos_logs/boot.log'" </dev/null >/dev/null 2>&1 &

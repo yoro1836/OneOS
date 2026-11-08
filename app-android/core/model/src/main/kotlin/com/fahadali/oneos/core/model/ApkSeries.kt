@@ -17,16 +17,17 @@ enum class ApkSeries(val id: String, val label: String, val profileIds: List<Str
         "Galaxy S26 series and Z Flip8",
         listOf(
             Profiles.ID_S_ULTRA_8850, Profiles.ID_S_PLUS_8850, Profiles.ID_S_8850, Profiles.ID_S_8850_JP, Profiles.ID_S_PLUS_9965,
-            Profiles.ID_FLIP8,
+            Profiles.ID_FLIP8, Profiles.ID_S_9965,
         ),
     ),
     S25(
         "s25",
-        "Galaxy S25, S24, S23, Z Flip7, Z Flip6, Z Flip5, A57, A56, A36 and A07",
+        "Galaxy S25, S25 Edge, S24, S24 FE, S23, Z Flip7, Z Flip6, Z Flip5, A57, A56, A36, A26, A17, A16 5G, A16 4G and A07",
         listOf(
             Profiles.ID_S_ULTRA_8750, Profiles.ID_S_PLUS_8750, Profiles.ID_S_8750, Profiles.ID_S_ULTRA_8650,
             Profiles.ID_S_8550, Profiles.ID_S_PLUS_8550, Profiles.ID_FLIP7, Profiles.ID_A56, Profiles.ID_A57, Profiles.ID_FLIP5,
             Profiles.ID_A07, Profiles.ID_A36, Profiles.ID_S_ULTRA_8550, Profiles.ID_FLIP6, Profiles.ID_S_9945,
+            Profiles.ID_S_EDGE_8750, Profiles.ID_S_FE_9945, Profiles.ID_A26, Profiles.ID_A17, Profiles.ID_A16, Profiles.ID_A16_4G, Profiles.ID_A16_S166, Profiles.ID_A35, Profiles.ID_A54, Profiles.ID_A27, Profiles.ID_A17_5G, Profiles.ID_FLIP7_FE,
         ),
     ),
     ;

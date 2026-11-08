@@ -123,17 +123,17 @@ SCRIPTS="oneos_switch.sh boot_status.sh OneOSBootStatus.dex oneos_boot_icon.png 
 SET_COMMON="services_patched.jar oplus-services_patched.jar vold_patched service.incremental_patched.so OneOSGuest.apk ims-ext-common_patched.jar oplus-telephony-common_patched.jar surfaceflinger_patched guards.txt art_payload.img i18n_payload.img runtime_payload.img sdkext_payload.img crashrecovery_payload.img extservices_payload.img permission_payload.img wifi_payload.img appsearch_payload.img mediaprovider_payload.img adservices_payload.img rkpd_payload.img healthfitness_payload.img ondevicepersonalization_payload.img configinfrastructure_payload.img"
 # The Pixel sets (the Fold's 0.3.7, the S26 Ultra's 0.4.10, the Pixel 9 Pro XL's 0.4.22): services.jar with the guest vold as gvld, the signal
 # poll, Pixel's status bar RRO, the in-guest OneOS app and its own payloads.
-SET_PIXEL="services_patched.jar framework_patched.jar vold_patched service.incremental_patched.so guards.txt oneos-telephony.jar oneos-telephony.sha256 OneOSPhoneInjection.apk OneOSPixelStatusBar.apk OneOSGuest.apk art_payload.img i18n_payload.img runtime_payload.img sdkext_payload.img crashrecovery_payload.img extservices_payload.img permission_payload.img wifi_payload.img appsearch_payload.img mediaprovider_payload.img adservices_payload.img rkpd_payload.img healthfitness_payload.img ondevicepersonalization_payload.img configinfrastructure_payload.img cellbroadcast_payload.img bt_payload.img nfcservices_payload.img telephonycore_payload.img conscrypt_payload.img profiling_payload.img gmssystem_payload.img"
+SET_PIXEL="services_patched.jar framework_patched.jar telephony-common_patched.jar libcamera_client_patched.so samcam.tar vold_patched service.incremental_patched.so guards.txt oneos-telephony.jar oneos-telephony.sha256 OneOSPhoneInjection.apk OneOSPixelStatusBar.apk OneOSPixelDoze.apk OneOSGuest.apk art_payload.img i18n_payload.img runtime_payload.img sdkext_payload.img crashrecovery_payload.img extservices_payload.img permission_payload.img wifi_payload.img appsearch_payload.img mediaprovider_payload.img adservices_payload.img rkpd_payload.img healthfitness_payload.img ondevicepersonalization_payload.img configinfrastructure_payload.img cellbroadcast_payload.img bt_payload.img nfcservices_payload.img telephonycore_payload.img conscrypt_payload.img profiling_payload.img gmssystem_payload.img"
 # Infinity-X (0.4.27): both guard jars, the camera codes, the guest vold, the AOSP
 # signal poll, the IMS backoff, the in-guest app and its own payloads.
-SET_INFINITYX="services_patched.jar oplus-services_patched.jar framework_patched.jar vold_patched service.incremental_patched.so libcamera_client_patched.so guards.txt ims-ext-common_patched.jar oneos-telephony.jar oneos-telephony.sha256 OneOSPhoneInjection.apk OneOSGuest.apk OneOSPixelStatusBar.apk OneOSAutoBrightness.apk art_payload.img i18n_payload.img runtime_payload.img sdkext_payload.img crashrecovery_payload.img extservices_payload.img permission_payload.img wifi_payload.img appsearch_payload.img mediaprovider_payload.img adservices_payload.img rkpd_payload.img healthfitness_payload.img ondevicepersonalization_payload.img configinfrastructure_payload.img bt_payload.img nfcservices_payload.img telephonycore_payload.img conscrypt_payload.img profiling_payload.img gmssystem_payload.img"
+SET_INFINITYX="services_patched.jar oplus-services_patched.jar framework_patched.jar vold_patched service.incremental_patched.so libcamera_client_patched.so telephony-common_patched.jar samcam.tar guards.txt ims-ext-common_patched.jar oneos-telephony.jar oneos-telephony.sha256 OneOSPhoneInjection.apk OneOSGuest.apk OneOSPixelStatusBar.apk art_payload.img i18n_payload.img runtime_payload.img sdkext_payload.img crashrecovery_payload.img extservices_payload.img permission_payload.img wifi_payload.img appsearch_payload.img mediaprovider_payload.img adservices_payload.img rkpd_payload.img healthfitness_payload.img ondevicepersonalization_payload.img configinfrastructure_payload.img bt_payload.img nfcservices_payload.img telephonycore_payload.img conscrypt_payload.img profiling_payload.img gmssystem_payload.img"
 # The HyperOS set (docs/hyperos.md; every phone from 0.4.31): services.jar and Xiaomi's two guarded jars, the signal poll, the
 # QTI IMS backoff, the in-guest OneOS app and the image's payloads. No gvld pins yet.
-SET_HYPEROS="services_patched.jar miui-services_patched.jar apprecovery.proinstaller_patched.jar framework_patched.jar miui-wifi-service_patched.jar miui-telephony-common_patched.jar vold_patched service.incremental_patched.so libcamera_client_patched.so guards.txt oneos-telephony.jar oneos-telephony.sha256 OneOSPhoneInjection.apk ims-ext-common_patched.jar OneOSGuest.apk socket_exec libaudiohal_aidl_patched.so MiWallpaper_patched.apk art_payload.img i18n_payload.img runtime_payload.img sdkext_payload.img crashrecovery_payload.img extservices_payload.img permission_payload.img wifi_payload.img appsearch_payload.img mediaprovider_payload.img adservices_payload.img rkpd_payload.img healthfitness_payload.img ondevicepersonalization_payload.img configinfrastructure_payload.img bt_payload.img libsurfaceflinger_patched.so"
+SET_HYPEROS="services_patched.jar miui-services_patched.jar apprecovery.proinstaller_patched.jar framework_patched.jar miui-wifi-service_patched.jar miui-telephony-common_patched.jar vold_patched service.incremental_patched.so libcamera_client_patched.so guards.txt oneos-telephony.jar oneos-telephony.sha256 OneOSPhoneInjection.apk ims-ext-common_patched.jar OneOSGuest.apk socket_exec libaudiohal_aidl_patched.so MiWallpaper_patched.apk art_payload.img i18n_payload.img runtime_payload.img sdkext_payload.img crashrecovery_payload.img extservices_payload.img permission_payload.img wifi_payload.img appsearch_payload.img mediaprovider_payload.img adservices_payload.img rkpd_payload.img healthfitness_payload.img ondevicepersonalization_payload.img configinfrastructure_payload.img bt_payload.img libsurfaceflinger_patched.so telephony-common_patched.jar samcam.tar samcam_bar.tar"
 # Nothing OS 5.0 (0.4.33, the Z Fold8 Ultra): its system is close to AOSP, so only
 # services.jar and framework.jar need the guards; no vendor framework, no vold
 # patch (its build is unknown to the patcher) and no signal poll injection.
-SET_NOTHING="NothingGenerateRingtoneService_patched.apk NothingLauncher3_patched.apk OneOSBrightnessRange.apk OneOSFoldCutout.apk OneOSGuest.apk OneOSNtAbout.apk OneOSNtAboutFlip.apk OneOSNtAboutFold8.apk OneOSNtAboutPhone.apk OneOSNtAboutS26U.apk OneOSNtEssentialKey.apk OneOSPhoneInjection.apk OneOSTabletQs.apk SystemUI_patched.apk adservices_payload.img appsearch_payload.img art_payload.img bt_payload.img cellbroadcast_payload.img configinfrastructure_payload.img crashrecovery_payload.img extservices_payload.img framework_patched.jar guards.txt healthfitness_payload.img i18n_payload.img ims-ext-common_patched.jar libbootanimation_preapex_patched.so libcamera_client_patched.so mediaprovider_payload.img nfcservices_payload.img nothing_customringtone.tar nothing_product_media.tar nt-telephony-common_patched.jar ondevicepersonalization_payload.img oneos-telephony.jar oneos-telephony.sha256 permission_payload.img rkpd_payload.img runtime_payload.img samcam.tar sdkext_payload.img service.incremental_patched.so services_patched.jar surfaceflinger_patched vold_patched wifi_payload.img"
+SET_NOTHING="NothingGenerateRingtoneService_patched.apk NothingLauncher3_patched.apk OneOSBrightnessRange.apk OneOSFoldCutout.apk OneOSGuest.apk OneOSNtAbout.apk OneOSNtAboutFlip.apk OneOSNtAboutFold8.apk OneOSNtAboutPhone.apk OneOSNtAboutS26U.apk OneOSNtEssentialKey.apk OneOSPhoneInjection.apk OneOSTabletQs.apk SystemUI_patched.apk adservices_payload.img appsearch_payload.img art_payload.img bt_payload.img cellbroadcast_payload.img configinfrastructure_payload.img crashrecovery_payload.img extservices_payload.img framework_patched.jar guards.txt healthfitness_payload.img i18n_payload.img ims-ext-common_patched.jar libbootanimation_preapex_patched.so libcamera_client_patched.so mediaprovider_payload.img nfcservices_payload.img nothing_customringtone.tar nothing_product_media.tar nt-telephony-common_patched.jar ondevicepersonalization_payload.img oneos-telephony.jar oneos-telephony.sha256 permission_payload.img rkpd_payload.img runtime_payload.img samcam.tar samcam_bar.tar sdkext_payload.img service.incremental_patched.so services_patched.jar surfaceflinger_patched vold_patched wifi_payload.img"
 # Host /data trees of switcher/assets/bridges.sh (relative to /data).
 BRIDGE_HOSTS="app app-staging user user_de dalvik-cache misc/profiles data media misc/user misc_ce/0/sdksandbox misc_de/0/sdksandbox misc_ce/0/rollback misc_de/0/rollback resource-cache"
 ENV_KEYS="ONEOS_APP ONEOS_PROFILE ONEOS_SPLASH_COMPONENT ONEOS_WALLPAPER_PROBE ONEOS_RECORD ONEOS_LOGCAT ONEOS_GUEST_FORM ONEOS_GUEST_FOLD ONEOS_COVER_TSP ONEOS_GUEST_FOLD_CONTINUE ONEOS_GUEST_UNFOLD_PORTRAIT ONEOS_GUEST_COMPACT_WINDOW ONEOS_GUEST_WALLPAPER_GRID ONEOS_GUEST_HIDE_GMS ONEOS_HEAT_CAP ONEOS_GUEST_SEC_IMS ONEOS_GUEST_EDM_STUB ONEOS_VERBOSE_BOOT ONEOS_RETURN_MODE"
@@ -172,9 +172,22 @@ profile_info() {
         a07) echo "SM-A075 a07 MT6789 bar" ;;
         flip8) echo "SM-F776 b8s s5e9965 flip" ;;
         a36) echo "SM-A366 a36xq SM6475 bar" ;;
+        a27) echo "SM-A276 a27xq SM6475 bar" ;;
         s-ultra-8550) echo "SM-S918 dm3q SM8550 bar" ;;
         flip6) echo "SM-F741 b6q SM8650 flip" ;;
         s-9945) echo "SM-S921 e1s s5e9945 bar" ;;
+        s-edge-8750) echo "SM-S937 psq SM8750 bar" ;;
+        s-fe-9945) echo "SM-S721 r12s s5e9945 bar" ;;
+        a26) echo "SM-A266 a26x s5e8835 bar" ;;
+        a17) echo "SM-A175 a17 MT6789 bar" ;;
+        a16-4g) echo "SM-A165 a16 MT6789 bar" ;;
+        a16-s166) echo "SM-S166 a16x s5e8535 bar" ;;
+        a35) echo "SM-A356 a35x s5e8835 bar" ;;
+        a54) echo "SM-A546 a54x s5e8835 bar" ;;
+        a16) echo "SM-A166 a16x s5e8535 bar" ;;
+        a17-5g) echo "SM-A176 a17x s5e8535 bar" ;;
+        flip7-fe) echo "SM-F761 b7r s5e9945 flip" ;;
+        s-9965) echo "SM-S942 m1s s5e9965 bar" ;;
         *) return 1 ;;
     esac
 }
@@ -194,6 +207,7 @@ profile_set() {
         "s-8850-jp nothingos5-metroid") echo nothing-f8u ;;
         "s-plus-8850 nothingos5-metroid") echo nothing-f8u ;;
         "s-plus-9965 nothingos5-metroid") echo nothing-f8u ;;
+        "s-9965 nothingos5-metroid") echo nothing-f8u ;;
         "flip8 nothingos5-metroid") echo nothing-f8u ;;
         "s-ultra-8750 nothingos5-metroid") echo nothing-f8u ;;
         "s-8750 nothingos5-metroid") echo nothing-f8u ;;
@@ -202,71 +216,55 @@ profile_set() {
         "f7 nothingos5-metroid") echo nothing-f8u ;;
         "f6 nothingos5-metroid") echo nothing-f8u ;;
         "flip8 coloros17-findx9u-in") echo x9u-in-sultra ;;
-        "flip8 coloros17-findx9u") echo x9u-sultra ;;
         "flip8 pixel11pro-kodiak") echo pixel-sultra ;;
         "flip8 infinityx41-findx9u") echo infinityx ;;
         "flip8 hyperos-lhasa") echo hyper-f8u ;;
         "a36 coloros17-findx9u-in") echo x9u-in-sultra ;;
-        "a36 coloros17-findx9u") echo x9u-sultra ;;
-        "a36 pixel9proxl-komodo") echo pixel9-sultra ;;
         "a36 infinityx41-findx9u") echo infinityx ;;
         "a36 hyperos-lhasa") echo hyper-f8u ;;
+        "a27 coloros17-findx9u-in") echo x9u-in-sultra ;;
+        "a27 infinityx41-findx9u") echo infinityx ;;
+        "a27 hyperos-lhasa") echo hyper-f8u ;;
         "s-ultra-8850 coloros17-findx9u-in") echo x9u-in-sultra ;;
-        "s-ultra-8850 coloros17-findx9u") echo x9u-sultra ;;
         "s-ultra-8850 pixel11pro-kodiak") echo pixel-sultra ;;
         "s-ultra-8750 coloros17-findx9u-in") echo x9u-in-sultra ;;
-        "s-ultra-8750 coloros17-findx9u") echo x9u-sultra ;;
         "s-ultra-8750 pixel9proxl-komodo") echo pixel9-sultra ;;
         "s-8750 coloros17-findx9u-in") echo x9u-in-sultra ;;
-        "s-8750 coloros17-findx9u") echo x9u-sultra ;;
         "s-8750 pixel9proxl-komodo") echo pixel9-sultra ;;
         "f7 coloros17-findn6") echo n6-f8u ;;
         "s-plus-8750 coloros17-findx9u-in") echo x9u-in-sultra ;;
-        "s-plus-8750 coloros17-findx9u") echo x9u-sultra ;;
         "s-plus-8750 pixel9proxl-komodo") echo pixel9-sultra ;;
-        "f8 coloros17-findn6") echo n6-f8u ;;
+        "f8 coloros17-findn6") echo n6-global-f8 ;;
         "f8 pixel11fold-yogi") echo pixel-f8 ;;
         "s-8850 coloros17-findx9u-in") echo x9u-in-sultra ;;
-        "s-8850 coloros17-findx9u") echo x9u-sultra ;;
         "s-8850 pixel11pro-kodiak") echo pixel-sultra ;;
         "s-8850-jp coloros17-findx9u-in") echo x9u-in-sultra ;;
-        "s-8850-jp coloros17-findx9u") echo x9u-sultra ;;
         "s-8850-jp pixel11pro-kodiak") echo pixel-sultra ;;
         "s-ultra-8650 coloros17-findx9u-in") echo x9u-in-sultra ;;
-        "s-ultra-8650 coloros17-findx9u") echo x9u-sultra ;;
         "s-ultra-8650 pixel9proxl-komodo") echo pixel9-sultra ;;
         "s-8550 coloros17-findx9u-in") echo x9u-in-sultra ;;
-        "s-8550 coloros17-findx9u") echo x9u-sultra ;;
         "s-8550 pixel9proxl-komodo") echo pixel9-sultra ;;
         "s-plus-8550 coloros17-findx9u-in") echo x9u-in-sultra ;;
-        "s-plus-8550 coloros17-findx9u") echo x9u-sultra ;;
         "s-plus-8550 pixel9proxl-komodo") echo pixel9-sultra ;;
         "s-plus-8850 coloros17-findx9u-in") echo x9u-in-sultra ;;
-        "s-plus-8850 coloros17-findx9u") echo x9u-sultra ;;
         "s-plus-8850 pixel11pro-kodiak") echo pixel-sultra ;;
         "s-plus-9965 coloros17-findx9u-in") echo x9u-in-sultra ;;
-        "s-plus-9965 coloros17-findx9u") echo x9u-sultra ;;
         "s-plus-9965 pixel11pro-kodiak") echo pixel-sultra ;;
+        "s-9965 coloros17-findx9u-in") echo x9u-in-sultra ;;
+        "s-9965 pixel11pro-kodiak") echo pixel-sultra ;;
         "flip7 coloros17-findx9u-in") echo x9u-in-sultra ;;
-        "flip7 coloros17-findx9u") echo x9u-sultra ;;
         "flip7 pixel9proxl-komodo") echo pixel9-sultra ;;
         "a56 coloros17-findx9u-in") echo x9u-in-sultra ;;
         "a57 coloros17-findx9u-in") echo x9u-in-sultra ;;
-        "a56 coloros17-findx9u") echo x9u-sultra ;;
-        "a57 coloros17-findx9u") echo x9u-sultra ;;
         "a56 pixel9proxl-komodo") echo pixel9-sultra ;;
         "a57 pixel9proxl-komodo") echo pixel9-sultra ;;
         "s-ultra-8550 coloros17-findx9u-in") echo x9u-in-sultra ;;
         "flip6 coloros17-findx9u-in") echo x9u-in-sultra ;;
         "s-9945 coloros17-findx9u-in") echo x9u-in-sultra ;;
-        "s-ultra-8550 coloros17-findx9u") echo x9u-sultra ;;
-        "flip6 coloros17-findx9u") echo x9u-sultra ;;
-        "s-9945 coloros17-findx9u") echo x9u-sultra ;;
         "s-ultra-8550 pixel9proxl-komodo") echo pixel9-sultra ;;
         "flip6 pixel9proxl-komodo") echo pixel9-sultra ;;
         "s-9945 pixel9proxl-komodo") echo pixel9-sultra ;;
         "flip5 coloros17-findx9u-in") echo x9u-in-sultra ;;
-        "flip5 coloros17-findx9u") echo x9u-sultra ;;
         "flip5 pixel9proxl-komodo") echo pixel9-sultra ;;
         "f8u infinityx41-findx9u") echo infinityx ;;
         "f8 infinityx41-findx9u") echo infinityx ;;
@@ -283,6 +281,8 @@ profile_set() {
         "s-8850-jp hyperos-lhasa") echo hyper-f8u ;;
         "s-plus-9965 infinityx41-findx9u") echo infinityx ;;
         "s-plus-9965 hyperos-lhasa") echo hyper-f8u ;;
+        "s-9965 infinityx41-findx9u") echo infinityx ;;
+        "s-9965 hyperos-lhasa") echo hyper-f8u ;;
         "s-ultra-8750 infinityx41-findx9u") echo infinityx ;;
         "s-ultra-8750 hyperos-lhasa") echo hyper-f8u ;;
         "s-plus-8750 infinityx41-findx9u") echo infinityx ;;
@@ -313,6 +313,36 @@ profile_set() {
         "f5 coloros17-findn6") echo n6-f8u ;;
         "f5 infinityx41-findx9u") echo infinityx ;;
         "a07 infinityx41-findx9u") echo infinityx ;;
+        "s-edge-8750 nothingos5-metroid") echo nothing-f8u ;;
+        "s-edge-8750 coloros17-findx9u-in") echo x9u-in-sultra ;;
+        "s-edge-8750 pixel9proxl-komodo") echo pixel9-sultra ;;
+        "s-edge-8750 infinityx41-findx9u") echo infinityx ;;
+        "s-edge-8750 hyperos-lhasa") echo hyper-f8u ;;
+        "s-fe-9945 coloros17-findx9u-in") echo x9u-in-sultra ;;
+        "s-fe-9945 pixel9proxl-komodo") echo pixel9-sultra ;;
+        "s-fe-9945 infinityx41-findx9u") echo infinityx ;;
+        "s-fe-9945 hyperos-lhasa") echo hyper-f8u ;;
+        "a26 coloros17-findx9u-in") echo x9u-in-sultra ;;
+        "a26 infinityx41-findx9u") echo infinityx ;;
+        "a35 coloros17-findx9u-in") echo x9u-in-sultra ;;
+        "a35 infinityx41-findx9u") echo infinityx ;;
+        "a54 coloros17-findx9u-in") echo x9u-in-sultra ;;
+        "a54 infinityx41-findx9u") echo infinityx ;;
+        "a16-4g infinityx41-findx9u") echo infinityx ;;
+        "a16-s166 infinityx41-findx9u") echo infinityx ;;
+        "a17 infinityx41-findx9u") echo infinityx ;;
+        "a16 infinityx41-findx9u") echo infinityx ;;
+        "a17-5g infinityx41-findx9u") echo infinityx ;;
+        "a07 coloros17-findx9u-in") echo x9u-in-sultra ;;
+        "a17 coloros17-findx9u-in") echo x9u-in-sultra ;;
+        "a16-4g coloros17-findx9u-in") echo x9u-in-sultra ;;
+        "a16 coloros17-findx9u-in") echo x9u-in-sultra ;;
+        "a16-s166 coloros17-findx9u-in") echo x9u-in-sultra ;;
+        "a17-5g coloros17-findx9u-in") echo x9u-in-sultra ;;
+        "flip7-fe coloros17-findx9u-in") echo x9u-in-sultra ;;
+        "flip7-fe pixel9proxl-komodo") echo pixel9-sultra ;;
+        "flip7-fe infinityx41-findx9u") echo infinityx ;;
+        "flip7-fe hyperos-lhasa") echo hyper-f8u ;;
         *) return 1 ;;
     esac
 }
@@ -326,7 +356,6 @@ image_raw() {
     fi
     case "$1" in
         coloros17-findn6) echo "14829686784 eec6c10581657b17f3164d6f964c749b351c4a7ec07233840da5f6a0ce28a47c" ;;
-        coloros17-findx9u) echo "10385141760 302467fc4e77998e84c10e037326508a39ab9e4be34058b751f0a768c7ff23e7" ;;
         coloros17-findx9u-in) echo "14669168640 92c7cd8485dd6ef80d1f5c734ea13a8744510c15b77a18471eb11078df84ddb6" ;;
         pixel11fold-yogi) echo "6559223808 8b303c37916288545b3b4a317c368d89680b5c3ce09873dc764381ddd0e32830" ;;
         pixel11pro-kodiak) echo "6529871872 ac661a520263fa73a2b9996f19763350457b1558863d1dc15326a365ce1784c6" ;;
@@ -340,15 +369,15 @@ image_raw() {
 
 set_files() {
     case "$1" in
-        n6-f8u) echo "$SET_COMMON OneOSWallpapersFoldGrid.apk cellbroadcast_payload.img framework_patched.jar telephony-common_patched.jar libcamera_client_patched.so samcam.tar Fold8SystemUI.apk Fold8AngleRelay.dex" ;;
-        x9u-sultra) echo "$SET_COMMON" ;;
-        x9u-in-sultra) echo "$SET_COMMON cellbroadcast_payload.img framework_patched.jar telephony-common_patched.jar libcamera_client_patched.so samcam.tar" ;;
-        pixel-f8u) echo "$SET_PIXEL Fold8PixelSystemUI.apk Fold8AngleRelay.dex OneOSPixelUnfold.apk" ;;
-        pixel-f8) echo "$SET_PIXEL Fold8PixelSystemUI.apk Fold8AngleRelay.dex Fold8PixelUnfold.apk" ;;
-        pixel-sultra) echo "$SET_PIXEL" ;;
+        n6-global-f8) echo "$SET_COMMON OneOSWallpapersFoldGrid.apk cellbroadcast_payload.img framework_patched.jar telephony-common_patched.jar libcamera_client_patched.so samcam.tar Fold8SystemUI.apk Fold8AngleRelay.dex KeKeThemeSpace_patched.apk GlobalVerifiedAddons.tar" ;;
+        n6-f8u) echo "$SET_COMMON OneOSWallpapersFoldGrid.apk cellbroadcast_payload.img framework_patched.jar telephony-common_patched.jar libcamera_client_patched.so samcam.tar Fold8SystemUI.apk Fold8AngleRelay.dex KeKeThemeSpace_patched.apk" ;;
+        x9u-in-sultra) echo "$SET_COMMON cellbroadcast_payload.img framework_patched.jar telephony-common_patched.jar libcamera_client_patched.so samcam.tar KeKeThemeSpace_patched.apk" ;;
+        pixel-f8u) echo "$SET_PIXEL Fold8PixelSystemUI.apk Fold8AngleRelay.dex OneOSPixelUnfold.apk yogi-services_patched.jar libbootanimation_preapex_patched.so OneOSPixelLauncher.apk OneOSFoldCutout.apk" ;;
+        pixel-f8) echo "$SET_PIXEL Fold8PixelSystemUI.apk Fold8AngleRelay.dex Fold8PixelUnfold.apk yogi-services_patched.jar libbootanimation_preapex_patched.so OneOSPixelLauncher.apk" ;;
+        pixel-sultra) echo "$SET_PIXEL OneOSPixelSystemUI.apk OneOSPixelLauncher.apk" ;;
         hyper-f8u) echo "$SET_HYPEROS" ;;
         nothing-f8u) echo "$SET_NOTHING" ;;
-        pixel9-sultra) echo "$SET_PIXEL" ;;
+        pixel9-sultra) echo "$SET_PIXEL OneOSPixelSystemUI.apk OneOSPixelLauncher.apk libcameracompatbilityinfo_patched.so" ;;
         infinityx) echo "$SET_INFINITYX" ;;
         *) return 1 ;;
     esac
@@ -357,8 +386,8 @@ set_files() {
 # <set>: the image it was built from (scripts/make-overlays.sh, PackageSet.imageId).
 set_image() {
     case "$1" in
+        n6-global-f8) echo coloros17-findn6 ;;
         n6-f8u) echo coloros17-findn6 ;;
-        x9u-sultra) echo coloros17-findx9u ;;
         x9u-in-sultra) echo coloros17-findx9u-in ;;
         pixel-f8u|pixel-f8) echo pixel11fold-yogi ;;
         pixel-sultra) echo pixel11pro-kodiak ;;
@@ -739,10 +768,7 @@ do_begin() {
                     refuse "the stage holds another system's guest data ($dfam), not $B_IMAGE's: move the stage aside"
             fi
             if [ "$ours" = 0 ]; then
-                # Infinity-X is built on LineageOS: its own data has
-                # org.lineageos packages (a retried update has no marker yet).
-                if grep -q -s -F "org.lineageos." "$STAGE/data/system/packages.xml" &&
-                   { [ "$(data_family)" != infinityx ] || [ "$(image_family "$B_IMAGE" 2>/dev/null)" != infinityx ]; }; then
+                if grep -q -s -F "org.lineageos." "$STAGE/data/system/packages.xml"; then
                     refuse "the stage holds LineageOS data, not $B_IMAGE's: move it aside"
                 fi
                 # Never trust another stage's persist snapshot (it could
@@ -842,6 +868,40 @@ do_keep_raw() {
     write_raw_id "$1" "$2"
     record_received "$2" system.raw
     say "@@OK keep-raw"
+}
+
+# Set files the stage already has (0.4.42, keep-raw's twin for the set's files): a repair or
+# an app update re-sent all of a set's files to root one call each (90 s for 51 files on the
+# Fold). stdin: <bytes> of "<sha256>  <name>" lines, the app's list for this set. Each named
+# file of the plan that the stage holds as a root-owned regular file with exactly that SHA-256
+# and its mode is recorded as received; the app sends the rest with receive. finish hashes every
+# file again against what was recorded.
+do_keep_files() {
+    [ $# -eq 1 ] || usage "keep-files <bytes>"
+    is_dec "$1" && ge 65536 "$1" || usage "keep-files size $1"
+    need_plan
+    idle_or_refuse
+    part="$STAGE/incoming/keep-files.part"
+    rm -f "$part"
+    head -c "$1" > "$part" || { rm -f "$part"; die "could not read the list"; }
+    [ "$(stat -c %s "$part")" = "$1" ] || { rm -f "$part"; refuse "the list arrived incomplete"; }
+    kept=0
+    while read -r sum name rest; do
+        [ -n "$sum$name" ] || continue
+        { is_hex64 "$sum" && [ -z "$rest" ]; } || { rm -f "$part"; refuse "the list is not sha256sum lines"; }
+        case "$name" in ''|.*|*[!A-Za-z0-9._+-]*) rm -f "$part"; refuse "the list names '$name'" ;; esac
+        in_list "$name" "$P_FILES" || { rm -f "$part"; refuse "$name is not a file of $P_SET"; }
+        kf="$STAGE/$name"
+        [ -f "$kf" ] && [ ! -L "$kf" ] && mine "$kf" || continue
+        [ "0$(stat -c %a "$kf")" = "$(file_mode "$name")" ] || continue
+        [ "$(sha "$kf")" = "$sum" ] || continue
+        record_received "$sum" "$name"
+        say "@@RESULT kept $name"
+        kept=$((kept + 1))
+    done < "$part"
+    rm -f "$part"
+    say "@@INFO $kept files already in the stage"
+    say "@@OK keep-files"
 }
 
 # table and env: stdin is a small text file, checked before it is put in place.
@@ -1379,11 +1439,51 @@ migrate_legacy() { # <stage|copies>
     say "@@INFO renamed the stage ${LEGACY#$T} to ${STAGE#$T}"
 }
 
+# The app's own update (0.4.41). The app downloaded the APK of its GitHub
+# release into its files (oneos-update/OneOS.apk) and checked it: the SHA-256
+# update.json names, its own signing certificate, a higher versionCode. Root
+# copies it into the stage, checks its size and hash again and hands it to pm
+# with the app's package name: pm refuses another package, another signing key
+# and an older version. The install kills the app, so this shell leaves the
+# app's cgroup first and opens OneOS again when pm is done.
+do_selfupdate() {
+    [ $# -eq 3 ] || usage "selfupdate <bytes> <sha256> <versionCode>"
+    bytes=$1 sum=$2 code=$3
+    is_dec "$bytes" && is_hex64 "$sum" && is_dec "$code" || usage "selfupdate $*"
+    ge 268435456 "$bytes" || refuse "the update is too large"
+    # The one read outside the stage (StageAudit): the app's own download, never written.
+    upsrc="$DATA/user/0/$APP_PACKAGE/files/oneos-update/OneOS.apk"
+    [ -f "$upsrc" ] && [ ! -L "$upsrc" ] || refuse "the downloaded update is not in the app's files"
+    upd="$STAGE/update"
+    mkdir_mine "$upd" || die "could not make the stage's update folder"
+    rm -f "$upd"/OneOS-*.apk
+    upapk="$STAGE/update/OneOS-$code.apk"
+    step "copy the update"
+    cat "$upsrc" > "$upapk" || { rm -f "$upapk"; die "could not copy the update"; }
+    got=$(stat -c %s "$upapk")
+    [ "$got" = "$bytes" ] || { rm -f "$upapk"; refuse "the update has $got of $bytes bytes"; }
+    [ "$(sha "$upapk")" = "$sum" ] || { rm -f "$upapk"; refuse "the update does not match its SHA-256"; }
+    own "$upapk" 0644 || die "could not keep the update"
+    [ -z "$T" ] || refuse "test root: the update was checked, nothing was installed"
+    # The app may be gone before the last line: writing to it must not end this shell.
+    trap '' PIPE
+    echo $$ > /sys/fs/cgroup/cgroup.procs 2>/dev/null
+    step "install $code"
+    echo "=== OneOS app update to $code $(date '+%F %T') ===" >> "$STAGE/selfupdate.log"
+    pm install -r --pkg "$APP_PACKAGE" "$upapk" > "$upd/pm.out" 2>&1
+    out=$(cat "$upd/pm.out")
+    printf '%s\n' "$out" >> "$STAGE/selfupdate.log"
+    rm -f "$upapk"
+    case "$out" in *Success*) ;; *) refuse "pm: $(printf '%s\n' "$out" | tail -n 1)" ;; esac
+    am start -n "$APP_PACKAGE/.ui.MainActivity" >> "$STAGE/selfupdate.log" 2>&1
+    say "@@OK selfupdate $code"
+}
+
 # --- Main ---------------------------------------------------------------------
 [ -n "$T" ] || [ "$(id -u)" = 0 ] || refuse "not root"
 verb=$1
 case "$verb" in
-    begin|receive|keep-raw|table|env|finish|launch|recover|restore|remove) migrate_legacy stage ;;
+    begin|receive|keep-raw|keep-files|table|env|finish|launch|recover|restore|remove|selfupdate) migrate_legacy stage ;;
     old-list|purge) migrate_legacy copies ;;
 esac
 [ -d "$STAGE" ] && mine "$STAGE" || refuse "$STAGE is not root's folder"
@@ -1393,6 +1493,7 @@ case "$verb" in
     begin) do_begin "$@" ;;
     receive) do_receive "$@" ;;
     keep-raw) do_keep_raw "$@" ;;
+    keep-files) do_keep_files "$@" ;;
     table) do_table "$@" ;;
     env) do_env "$@" ;;
     finish) do_finish "$@" ;;
@@ -1402,5 +1503,6 @@ case "$verb" in
     purge) do_purge "$@" ;;
     restore) do_restore "$@" ;;
     remove) do_remove "$@" ;;
+    selfupdate) do_selfupdate "$@" ;;
     *) usage "unknown verb '$verb'" ;;
 esac

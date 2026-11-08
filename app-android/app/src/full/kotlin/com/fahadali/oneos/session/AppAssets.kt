@@ -14,12 +14,13 @@ import java.io.InputStream
  * `assets/root/oneos_root.sh` (pinned in BuildConfig), the per-set lists
  * `assets/oneos/sets/<set>.sha256` and `scripts.sha256` (their hashes pinned
  * in BuildConfig too), and every file once under `assets/oneos/files/<sha256>`
- * with its size in `index.txt`. Every list is checked against its pin before
+ * with its size in `index.txt`. 0.4.41: the set files are not in the APK; `remote.txt`
+ * names each one's Drive id and [SetDownloader] fetches the phone's set by hash. Every list is checked against its pin before
  * use; every file is hashed again while it streams to root, and root checks
  * it once more.
  */
 object AppAssets {
-    data class Staged(val name: String, val sha256: String, val bytes: Long)
+    data class Staged(val name: String, val sha256: String, val bytes: Long, val source: String? = null)
 
     class Broken(message: String) : IllegalStateException(message)
 
@@ -48,7 +49,7 @@ object AppAssets {
             ?: throw Broken("no pin for $set")
     }
 
-    private fun list(ctx: Context, id: String): Map<String, String> {
+    internal fun list(ctx: Context, id: String): Map<String, String> {
         val text = runCatching { read(ctx, "oneos/sets/$id.sha256") }
             .getOrElse { throw Broken("this OneOS download does not carry the $id set (another series' download has it)") }
         if (Hashes.sha256(text) != pinned(id)) throw Broken("the app's $id list is not the pinned one")
@@ -62,28 +63,59 @@ object AppAssets {
             .associate { it.substringBefore(' ') to (it.substringAfter(' ').toLongOrNull() ?: -1) }
 
     /** The session scripts and host_installd.txt, then the set's files, in staging order. */
-    fun files(ctx: Context, set: PackageSet): List<Staged> {
+    fun files(ctx: Context, set: PackageSet, profile: String): List<Staged> {
         val scripts = list(ctx, "scripts")
-        val files = list(ctx, set.id)
+        val channel = PatchChannels.snapshot(ctx, set, profile)
+        val base = list(ctx, set.id)
+        val files = channel?.files?.associate { it.name to it.sha256 } ?: base
         val problems = set.check(ShaList.render(files))
         if (problems.isNotEmpty()) throw Broken(problems.first())
         if (scripts.keys != RootScript.SCRIPTS.toSet()) throw Broken("the app's script list is not ${RootScript.SCRIPTS}")
         val size = sizes(ctx)
         return (RootScript.SCRIPTS.map { it to scripts.getValue(it) } + set.names.map { it to files.getValue(it) }).map { (n, sha) ->
-            val b = size[sha] ?: throw Broken("$n has no size in the app's index")
-            Staged(n, sha, b)
+            // Only a file the channel really replaced (PatchManifest.REPLACEABLE) comes from its source.
+            val override = channel?.files?.firstOrNull { it.name == n && it.sha256 != base[n] }
+            val b = override?.bytes ?: size[sha] ?: throw Broken("$n has no size in the app's index")
+            Staged(n, sha, b, override?.source)
         }
     }
 
-    private val expectedStages = java.util.concurrent.ConcurrentHashMap<String, Map<String, String>>()
+    /** Compare the stage with the selected channel snapshot, including its exact payload hashes. */
+    fun expectedStageHashes(ctx: Context, set: PackageSet, profile: String): Map<String, String> =
+        files(ctx, set, profile).associate { it.name to it.sha256 } + ("bin/oneos_root.sh" to BuildConfig.ROOT_SCRIPT_SHA256)
 
-    /** Compare the installed stage with this APK, not only its own older manifest. */
-    fun expectedStageHashes(ctx: Context, set: PackageSet): Map<String, String> =
-        expectedStages.computeIfAbsent(set.id) {
-            files(ctx, set).associate { it.name to it.sha256 } + ("bin/oneos_root.sh" to BuildConfig.ROOT_SCRIPT_SHA256)
+    /**
+     * sha256 -> the sources of every set file the APK does not carry (0.4.41: one Drive id; empty in a packed
+     * test build). 0.4.53: several per file: "gh:<tag>", a GitHub release asset, and Drive copies in other
+     * folders, each with its own download limit ([SetDownloader.url]).
+     */
+    fun remoteIds(ctx: Context): Map<String, List<String>> =
+        runCatching { read(ctx, "oneos/files/remote.txt") }.getOrNull()?.toString(Charsets.UTF_8)?.lines()
+            ?.filter { it.isNotBlank() }
+            ?.associate { l -> l.substringBefore(' ') to l.substringAfter(' ').split(',').map { it.trim() }.filter { it.isNotEmpty() } }
+            ?: emptyMap()
+
+    private fun packed(ctx: Context): Set<String> =
+        ctx.applicationContext.assets.list("oneos/files")?.toSet() ?: emptySet()
+
+    /** The files of [files] that are neither in the APK nor downloaded yet, with their sources. */
+    fun toDownload(ctx: Context, files: List<Staged>): List<Pair<Staged, List<String>>> {
+        val inApk = packed(ctx)
+        val ids = remoteIds(ctx)
+        return files.filter { it.sha256 !in inApk && SetDownloader.cached(ctx, it) == null }.map { f ->
+            f to (f.source?.let { (listOf(it) + ids[f.sha256].orEmpty()).distinct() } ?: ids[f.sha256]?.takeIf { it.isNotEmpty() } ?: throw Broken("${f.name} is neither in the app nor on its download list"))
         }
+    }
 
-    fun open(ctx: Context, f: Staged): InputStream = ctx.applicationContext.assets.open("oneos/files/${f.sha256}")
+    /** Every set file hash any list in this app names: what the download cache may keep. */
+    fun allSetHashes(ctx: Context): Set<String> = remoteIds(ctx).keys + PatchChannels.cachedHashes(ctx)
+
+    /** From the APK when it carries the file, else from the downloads ([SetDownloader]). */
+    fun open(ctx: Context, f: Staged): InputStream {
+        if (f.sha256 in packed(ctx)) return ctx.applicationContext.assets.open("oneos/files/${f.sha256}")
+        val file = SetDownloader.cached(ctx, f) ?: throw Broken("${f.name} is not downloaded")
+        return file.inputStream()
+    }
 
     /** switcher/patches/host_installd.txt as the app ships it (the installd gate's expected table). */
     fun hostInstalldTxt(ctx: Context): String {
