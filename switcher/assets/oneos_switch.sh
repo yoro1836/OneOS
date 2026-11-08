@@ -1983,6 +1983,12 @@ while true; do
                 \$G /system/bin/content query --uri 'content://com.samsung.rcs.dmconfigurationprovider/omadm/./3GPP_IMS/LBO_P-CSCF_Address/LBO_P-CSCF_Address_1/Address#simslot0' 2>&1 | head -2 | tr -d '\\r' | sed 's/[0-9a-f]*[.:][0-9a-f.:]*[0-9a-f]/<addr>/g; s/^/[UI Activator] Samsung IMS: DM query: /'
                 \$G /system/bin/logcat -d 2>/dev/null | grep -a -E '#IMSREGI|EMPTY_PCSCF|DM pcscf|getPcscfAddress|isOmadm|triggerOmadm|onDmConfigCompleted|SipResp' | tail -40 | cut -c1-200 | sed 's/^/[UI Activator] Samsung IMS log: /'
                 done ) &
+                # Call control trail (DTMF, hang-up): the guest's call lines for the whole
+                # session in the stage (910b73c1 had no logcat capture, only SipResp lines).
+                LB=''; echo | grep --line-buffered x >/dev/null 2>&1; [ \$? -le 1 ] && LB=--line-buffered
+                ( $BB nsenter -t \$PID -m /system/bin/sh /data/oneos_genv.sh /system/bin/logcat -b main,radio,system -v threadtime 2>/dev/null |
+                  grep \$LB -a -i -m 60000 -E 'dtmf|SipReq|SipResp|ImsPhoneCallTracker|ImsPhoneConnection|ImsCallSession|ImsCall |CallStateMachine|ImsInCall|ImsAlertingCall|ImsOutgoingCall|ResipVolte|VolteSvc|TelephonyConnection|ICA\\.|CSW\\.|hangup|disconnectCall|REQUEST_DISCONNECT' > $STAGE/ims_call.log ) </dev/null >/dev/null 2>&1 &
+                echo \"[UI Activator] Samsung IMS: call trail in $STAGE/ims_call.log\"
             else
                 # Samsung IMS off: the device setting overlay of an earlier session goes.
                 timeout 10 $BB nsenter -t \$PID -m /system/bin/sh /data/oneos_genv.sh /system/bin/cmd overlay disable --user 0 com.android.shell:OneOSImsMmtel >/dev/null 2>&1
@@ -3197,6 +3203,7 @@ if [ "$RETURN_MAX" -gt 0 ]; then
                     [ -f \$f ] && $BB ln -f \$f $LOGS/head/ 2>/dev/null
                 done
                 echo \"\$(date) logcat capture: \$(ls $LOGS/head 2>/dev/null | wc -l) files of the boot kept in $LOGS/head (hard links)\"
+                [ -f $LOGS/boot.log ] || echo \"\$(date) logcat capture: no boot.log (\$(ls $LOGS 2>/dev/null | tr '\\n' ' '); logcat pids: \$(pgrep -f '^logcat .*boot.log' | tr '\\n' ' '))\"
             fi
             if [ -n \"\$dname\" ]; then
                 SFP=\$(pidof surfaceflinger | awk '{print \$1}')
