@@ -180,6 +180,10 @@ abstract class OneOsFilesTask : DefaultTask() {
     @get:Input
     abstract val packSets: Property<Boolean>
 
+    /** oneos.testPackagesDir builds: set files without a remote copy are packed into the APK. */
+    @get:Input
+    abstract val packUnpublished: Property<Boolean>
+
     /** sha256 -> its sources, comma-separated: gh:<tag> and Drive file ids (packages/remote.txt). */
     @get:Input
     abstract val remoteIds: MapProperty<String, String>
@@ -247,7 +251,11 @@ abstract class OneOsFilesTask : DefaultTask() {
         fun putSet(src: File, sum: String, problems: MutableList<String>) {
             if (pack) { put(src, sum); return }
             val id = ids[sum]
-            if (id == null) { problems += "${src.name} ($sum) is not on Drive: run scripts/release-files.py"; return }
+            if (id == null) {
+                // A local debug build's own changed set file goes in the APK.
+                if (packUnpublished.get()) { put(src, sum); return }
+                problems += "${src.name} ($sum) is not on Drive: run scripts/release-files.py"; return
+            }
             sizes[sum] = src.length()
             remote[sum] = id
         }
@@ -266,7 +274,8 @@ abstract class OneOsFilesTask : DefaultTask() {
                 val publishedBytes = publishedSizes[sum]
                 // Remote files are pinned by the set manifest; no OEM build folder is needed
                 // (a contributor's checkout). Where the folder exists, it is checked as before.
-                if (!pack && !dir.isDirectory && n !in omitted && ids[sum] != null && publishedBytes != null) {
+                // A local debug build (oneos.testPackagesDir) may hold only the files it changed.
+                if (!pack && (!dir.isDirectory || (packUnpublished.get() && !f.isFile)) && n !in omitted && ids[sum] != null && publishedBytes != null) {
                     sizes[sum] = publishedBytes
                     remote[sum] = ids.getValue(sum)
                     continue
@@ -338,6 +347,7 @@ val oneosFiles = tasks.register<OneOsFilesTask>("oneosFiles") {
     scripts.set(sessionScripts.mapValues { it.value.path })
     notShipped.set(switcherNotShipped)
     packSets.set(packSetsInApk)
+    packUnpublished.set(testPackagesDir != null)
     remoteIds.set(setRemoteIds)
     packages.set(packagesDir)
     outputDir.set(layout.buildDirectory.dir("generated/oneos/assets"))
