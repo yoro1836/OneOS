@@ -1053,7 +1053,14 @@ do_launch() {
     st=$(cat "$bat/status" 2>/dev/null)
     temp=$(cat "$bat/temp" 2>/dev/null)
     is_dec "$cap" && is_dec "${temp#-}" || refuse "battery not readable"
-    [ "$cap" -ge 30 ] || [ "$st" = Charging ] || [ "$st" = Full ] || refuse "battery at $cap% and not charging"
+    # A connected charger counts even when the battery says "Not charging"
+    # (One UI pauses charging at times; the app's gate takes plugged too).
+    plugged=0
+    for ps in "$SYSFS"/class/power_supply/*; do
+        case "$(cat "$ps/type" 2>/dev/null)" in Mains|USB|USB_PD|USB_C|Wireless) ;; *) continue ;; esac
+        [ "$(cat "$ps/online" 2>/dev/null)" = 1 ] && { plugged=1; break; }
+    done
+    [ "$cap" -ge 30 ] || [ "$st" = Charging ] || [ "$st" = Full ] || [ $plugged = 1 ] || refuse "battery at $cap% and not charging"
     [ "$temp" -lt 420 ] || refuse "battery too warm"
     set -- $(stat -f -c '%a %S' "$DATA" 2>/dev/null)
     [ $# -eq 2 ] && ge "$(awk -v a="$1" -v s="$2" 'BEGIN { printf "%.0f", a * s }')" 11811160064 ||

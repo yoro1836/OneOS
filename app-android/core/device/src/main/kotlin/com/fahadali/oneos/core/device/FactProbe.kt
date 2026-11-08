@@ -182,7 +182,11 @@ class FactProbe(
         val temp = sticky?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, Int.MIN_VALUE)
             ?.takeIf { it != Int.MIN_VALUE }
             ?.let { it / 10f }
-        BatteryInfo(levelPercent = level, charging = bm.isCharging, temperatureC = temp)
+        // Plugged in counts: One UI reports a charger that is connected but not
+        // charging right now (fast-charge pause, protection, a weak charger) as
+        // not charging, and the gate refused a plugged-in phone below 30%.
+        val plugged = (sticky?.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) ?: 0) != 0
+        BatteryInfo(levelPercent = level, charging = bm.isCharging || plugged, temperatureC = temp)
     }.getOrNull()
 
     companion object {
