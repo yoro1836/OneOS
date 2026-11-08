@@ -1145,12 +1145,22 @@ setprop ctl.stop zygote
 # set). Recorded from its open files before it stops; closed with "V" below and
 # kicked by the feeder (guest_prepare.sh) for the session.
 rm -f "$STAGE/host_softdog_nodes"
-for p in $(pidof system_server); do
+{ for p in $(pidof system_server); do
     for fd in /proc/$p/fd/*; do
         t=$(readlink "$fd" 2>/dev/null)
         case "$t" in /dev/watchdog*|/dev/softdog*) echo "$t" ;; esac
     done
-done 2>/dev/null | sort -u > "$STAGE/host_softdog_nodes"
+  done
+    # S24 Exynos (One UI 9): system_server opens Samsung's softdog only to kick
+    # it, so at the switch it held nothing and nothing fed it; one session in
+    # several then panicked 100 s in (8cced97e, "Software Watchdog Timer expired
+    # 100s"). /dev/watchdog1 there is the system group's (the kernel's own
+    # /dev/watchdog and watchdog0 are root's, held by watchdogd): taken as the
+    # softdog too, so it gets the magic close below and the feeder's kicks.
+    for n in /dev/watchdog[1-9]; do
+        [ -c "$n" ] && [ "$(stat -c %g "$n" 2>/dev/null)" = 1000 ] && echo "$n"
+    done
+} 2>/dev/null | sort -u > "$STAGE/host_softdog_nodes"
 [ -s "$STAGE/host_softdog_nodes" ] || rm -f "$STAGE/host_softdog_nodes"
 [ -n "$SF_FROZEN" ] || kill -9 $(pidof surfaceflinger) 2>/dev/null || true
 kill -9 $(pidof bootanimation) 2>/dev/null || true
