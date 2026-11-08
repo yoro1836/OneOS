@@ -191,6 +191,9 @@ if [ "${1:-}" = supervise ]; then
     trap 'exit 0' HUP INT TERM
     end=$(( $(date +%s) + 600 ))
     saw_animation=0
+    anim_polls=0
+    enter=0
+    case "$(cat "$ONEOS_BOOT_DIR/title" 2>/dev/null)" in "Launching into"*) enter=1 ;; esac
     while current && [ "$(date +%s)" -lt "$end" ]; do
         sf=$(pidof surfaceflinger 2>/dev/null)
         CLASSPATH=/data/local/tmp/oneos/OneOSBootStatus.dex app_process /system/bin OneOSBootStatus "$ONEOS_BOOT_DIR" "$generation" &
@@ -204,6 +207,18 @@ if [ "${1:-}" = supervise ]; then
                        oneos_boot_event 'Display ready'; oneos_boot_stop; break
                    fi ;;
             esac
+            # Entering a guest: its own boot animation shows instead of this
+            # layer once it has run for about a second (S24 fork; the layer
+            # covered it until the guest's home screen).
+            ba=$(pidof bootanimation 2>/dev/null); ba=${ba%% *}
+            # The guest's (another mount namespace than init's), never One UI's.
+            if [ "$enter" = 1 ] && [ -n "$ba" ] &&
+               [ "$(readlink "/proc/$ba/ns/mnt" 2>/dev/null)" != "$(readlink /proc/1/ns/mnt 2>/dev/null)" ]; then
+                anim_polls=$((anim_polls + 1))
+                [ "$anim_polls" -ge 3 ] && { oneos_boot_event 'Boot animation'; oneos_boot_stop; break; }
+            else
+                anim_polls=0
+            fi
             [ "$(pidof surfaceflinger 2>/dev/null)" = "$sf" ] || break
             sleep 0.3
         done

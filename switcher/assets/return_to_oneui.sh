@@ -1033,6 +1033,11 @@ while :; do
             *nknown*|*rror*) pidof com.sec.android.app.launcher >/dev/null && { up=$t; say "One UI Home running after ${t}s"; } ;;
         esac
     fi
+    # The "Returning to One UI" layer goes once One UI is unlocked. Its own
+    # watch (boot_status.sh: boot_progress_enable_screen, bootanim exit) can
+    # miss One UI's start, and then it stayed on top of One UI and took every
+    # touch until its 600 s limit (S24, 0.4.61).
+    [ $up -gt 0 ] && [ -z "${boot_layer_off:-}" ] && { boot_layer_off=1; command -v oneos_boot_stop >/dev/null && oneos_boot_stop; }
     [ $up -gt 0 ] && [ $t -ge $((up + 30)) ] && break
     [ $up = 0 ] && [ $t -ge 180 ] && failsafe "user 0 not unlocked within 180 s"
 done
@@ -1071,4 +1076,5 @@ fi
 "$BB" rm -rf $NODES
 echo "$(cat /proc/sys/kernel/random/boot_id 2>/dev/null) $(date +%s)" > $S/return_inplace.done
 echo oneos_return > /sys/power/wake_unlock 2>/dev/null
+command -v oneos_boot_stop >/dev/null && oneos_boot_stop
 say "One UI restored in place ($(getenforce))."
