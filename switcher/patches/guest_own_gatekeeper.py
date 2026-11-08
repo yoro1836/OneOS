@@ -26,6 +26,9 @@ gatekeeper, weaver, vold keys and FRP stay out of reach as before:
 6. TrustManagerService never tells the phone's keystore the device is locked
    (KeyStoreAuthorization.onDeviceLocked dropped): One UI's keystore must not
    lock its unlocked-device-required keys behind the guest's lock.
+7. SyntheticPasswordManager.createSpBlob passes sid 0: a protector key bound
+   to this gatekeeper's sid would need an auth token only gatekeeperd gives
+   keystore, so the PIN could never unlock it.
 
 Fails closed: every site must match exactly once.
 
@@ -107,6 +110,12 @@ def main(root):
     t = sub1(t, r"(\.method public newSidForUser\(.*?deriveGkPassword\(\)\[B\n\n    move-result-object v0\n\n    const/4 v1, 0x0\n\n)    nop\n\n    const/4 v0, 0x0\n",
              r"\1    invoke-interface {p1, p3, v1, v1, v0}, " + GKS + r"->enroll(I[B[B[B)Landroid/service/gatekeeper/GateKeeperResponse;\n\n    move-result-object v0\n",
              "newSidForUser enroll restored")
+    # Protector keys in the (phone's) keystore are not bound to the sid: only
+    # the real gatekeeperd hands keystore the auth token that would unlock
+    # them, so a sid-bound key could never be used and the PIN would never
+    # unlock. The protector secret still comes from the PIN.
+    t = sub1(t, r"(\.method private createSpBlob\(Ljava/lang/String;\[B\[BJ\)\[B\n(?:(?!\.end method).)*?)    move-wide v4, p4\n",
+             r"\1    const-wide/16 v4, 0x0\n", "createSpBlob key not sid-bound")
     open(spm, "w").write(t)
 
     rks = os.path.join(ls_dir, "recoverablekeystore", "RecoverableKeyStoreManager.smali")
