@@ -242,8 +242,13 @@ add)
                 if (x > r && x < $10 - r && y > r && y < $11 - r && r >= 20) printf "%d,%d,%d", x + 0.5, y + 0.5, r + 0.5 }') ;;
     esac
     FPL=${ONEOS_GUEST_UDFPS_LOCATION-$FPL}
+    # data/oneos_udfps_want: guest_start.sh sets it again if the guest does not
+    # see it (the S24's lock screen still had no sensor place with it in the
+    # added list, eb5c9604; the blur property had gone the same way).
+    rm -f "$STAGE/data/oneos_udfps_want"
     if [ -n "$FPL" ] && [ "${ONEOS_GUEST_FINGERPRINT:-1}" = 1 ] && ! grep -q '^ro.oneos.udfps_location=' "$NEW"; then
         echo "ro.oneos.udfps_location=$FPL" >> "$NEW"
+        echo "$FPL" > "$STAGE/data/oneos_udfps_want" 2>/dev/null
         echo "guest_props: fingerprint sensor at $FPL (x,y,radius in panel pixels)"
     fi
     # ColorOS's animation level. OPPO's launcher turns its material blur on

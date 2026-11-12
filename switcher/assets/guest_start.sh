@@ -2548,10 +2548,25 @@ blur_again() {
     [ "$(getprop "$bk")" = 1 ] || setprop "$bk" 1 2>/dev/null
     echo "[Pivoted Root] window blur: $bk was '${bv}' $1, now '$(getprop "$bk")'"
 }
+# The fingerprint sensor's place (guest_props.sh), the same way.
+udfps_again() {
+    [ -s /data/oneos_udfps_want ] || return 0
+    uk=ro.oneos.udfps_location
+    uw=$(cat /data/oneos_udfps_want)
+    uv=$(getprop "$uk")
+    [ "$uv" != "$uw" ] || { echo "[Pivoted Root] fingerprint sensor place: $uk=$uv ($1)"; return 0; }
+    for urp in /data/adb/ksu/bin/resetprop /data/adb/ap/bin/resetprop /debug_ramdisk/resetprop /sbin/resetprop; do
+        [ -x "$urp" ] && "$urp" -n "$uk" "$uw" 2>/dev/null && break
+    done
+    [ "$(getprop "$uk")" = "$uw" ] || setprop "$uk" "$uw" 2>/dev/null
+    echo "[Pivoted Root] fingerprint sensor place: $uk was '${uv}' $1, now '$(getprop "$uk")' (wanted $uw)"
+}
 blur_again "before the root runtime"
+udfps_again "before the root runtime"
 if [ -f /data/oneos_root/enabled ]; then
     /system/bin/sh /data/oneos_runtime.sh pre || exit 3
     blur_again "after the root runtime's pre stage"
+    udfps_again "after the root runtime's pre stage"
     /system/bin/sh /data/oneos_runtime.sh late > /data/adb/oneos/run/late.log 2>&1 &
     exec /data/adb/oneos/bin/su --launch
 fi

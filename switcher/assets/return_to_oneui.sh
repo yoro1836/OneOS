@@ -211,13 +211,17 @@ if [ -n "$BB" ] && [ -n "$gp" ] && [ ! -L "$DR" ] && rm -rf "$DR" 2>/dev/null &&
     # The guest's fingerprint service on the phone's sensor (S24 fork): what
     # Samsung's HAL told it (sensor type, where on the panel) and how unlocks went.
     { echo "== sensor position (sysfs): $(cat /sys/class/fingerprint/fingerprint/position 2>&1)"
-      echo '== dumpsys fingerprint'; gd fingerprint | head -n 80
-      echo '== dumpsys biometric'; gd biometric | head -n 60
-      echo '== SystemUI'; gd activity service com.android.systemui | "$BB" grep -a -i -E 'udfps|sfps|fingerprint|sensorProps|sensorLocation' | head -n 80
-      echo '== log'
-      for f in /data/local/tmp/oneos_logs/boot.log.01 /data/local/tmp/oneos_logs/boot.log; do
-          [ -f "$f" ] && "$BB" grep -a -E 'Fingerprint|Udfps|UDFPS|BiometricService|AuthService|BiometricScheduler|OneOS: ' "$f"
-      done | tail -n 300
+      gxl() { timeout 12 "$BB" nsenter -t "$gp" -m /system/bin/sh /data/oneos_genv.sh "$@" 2>&1; }
+      echo "== guest props: ro.oneos.udfps_location='$(gxl /system/bin/getprop ro.oneos.udfps_location)' panel_scale='$(gxl /system/bin/getprop ro.oneos.panel_scale_milli)'"
+      echo "== guest services.jar: $(gxl /system/bin/sha256sum /system/framework/services.jar)"
+      echo "== logcat here: $(command -v logcat) $(ls -la "$(command -v logcat)" 2>&1); /system/bin/logcat: $(ls -la /system/bin/logcat 2>&1)"
+      echo '== dumpsys fingerprint'; gd fingerprint | head -n 60
+      echo '== SystemUI'; gd activity service com.android.systemui > "$DR/fp_sysui.tmp" 2>&1
+      "$BB" grep -a -i -B2 -A8 -E 'udfpsBounds|OverlayParams|scaleFactor|sensorLocations|nativeSensorBounds|sensorBounds|FingerprintPropertyRepository' "$DR/fp_sysui.tmp" | head -n 200
+      rm -f "$DR/fp_sysui.tmp"
+      echo '== log (the guest logcat binary, the shared logd)'
+      gxl /system/bin/logcat -d -b main,system -v threadtime 2>/dev/null |
+          "$BB" grep -a -E 'OneOSFpLocation|FingerprintProvider|FingerprintService|Udfps|UDFPS|AuthService|OneOS: ' | tail -n 200
     } > "$DR/fingerprint.txt" 2>&1 &
     p9=$!
     # Google sign-in (S24, Pixel: the sign-in screen closes at once). From the
