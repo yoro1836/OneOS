@@ -1228,6 +1228,19 @@ add)
             "$RP" -n "${line%%=*}" "${line#*=}" 2>/dev/null && echo "${line%%=*}" >> "$ADDED"
         done < "$NEW"
     fi
+    # The batch can report success and leave props out: on the S24 (KernelSU,
+    # 8fa025f6) ro.oneos.udfps_location and ro.oneos.panel_scale_milli were in
+    # the list and empty in the guest. Each one is read back, and set by itself
+    # when it is not there.
+    fixed=0; lost=0
+    while IFS= read -r line; do
+        k=${line%%=*}; v=${line#*=}
+        [ -n "$k" ] && [ -n "$v" ] || continue
+        [ "$(getprop "$k")" = "$v" ] && continue
+        "$RP" -n "$k" "$v" 2>/dev/null
+        if [ "$(getprop "$k")" = "$v" ]; then fixed=$((fixed + 1)); else lost=$((lost + 1)); lostk="$lostk $k"; fi
+    done < "$NEW"
+    [ $((fixed + lost)) = 0 ] || echo "guest_props: $fixed props were missing after the batch and set one by one; $lost could not be set:${lostk:- none}"
     echo "guest_props add: batch done $(date +%T)"
     echo "guest_props: added $(wc -l < "$ADDED") props from the guest's build.prop files"
     rm -f "$HOST" "$NEW"
