@@ -738,6 +738,25 @@ add)
             echo "guest_props: $NM=true for the session (Night Light: the image's treble NightMode overlay)"
         fi
     fi
+    # VoLTE with Samsung IMS on an AOSP framework (Pixel, S24 report
+    # 6e4eb3cc): IMS registered on LG U+, but ImsPhoneCallTracker switched
+    # MmTel voice off on every carrier config ("updateAllowedServices for RAT =
+    # 0, enabled = false") and Settings has no VoLTE switch: the image's
+    # carrier config for a carrier Pixel is not sold to says VoLTE is not
+    # available. ImsManager.isVolteEnabledByPlatform() answers true when
+    # persist.dbg.volte_avail_ovr is 1. Only with Samsung IMS in the guest,
+    # memory only, never over a value One UI has. ONEOS_GUEST_VOLTE_OVR=0
+    # leaves it out.
+    VO=persist.dbg.volte_avail_ovr
+    if [ "${ONEOS_GUEST_VOLTE_OVR:-1}" = 1 ] && [ -f "$STAGE/data/oneos_sec_ims" ]; then
+        if grep -qxF "$VO" "$HOST"; then
+            echo "guest_props: $VO is One UI's ($(getprop "$VO")), left alone"
+        else
+            sed -i '/^persist\.dbg\.volte_avail_ovr=/d' "$NEW"
+            echo "$VO=1" >> "$NEW"
+            echo "guest_props: $VO=1 for the session (VoLTE available to the guest framework with Samsung IMS)"
+        fi
+    fi
     # HyperOS on a fold: Xiaomi's fold flag lives in the phone's vendor props,
     # which the GSI does not carry. MiWallpaper (a fold build: the image is
     # Xiaomi's fold lhasa) loads the cover screen's two wallpaper records only
