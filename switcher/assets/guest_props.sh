@@ -1257,14 +1257,24 @@ add)
     # ro.arm64.memtag.bootctl_* (owner: no memory tagging switches on a phone
     # rooted for the boot only; a ro. one stays until the phone restarts).
     # ONEOS_GUEST_PROPS_HOLD adds names to that (spaces between).
-    fixed=0; left=0; held=0; heldn=""
+    fixed=0; left=0; held=0; heldn=""; rpd=""
     rm -f "$STAGE/data/oneos_props_want"
     while IFS= read -r line; do
         k=${line%%=*}; v=${line#*=}
         [ -n "$k" ] && [ -n "$v" ] || continue
         [ "$(getprop "$k")" = "$v" ] && continue
-        "$RP" -n "$k" "$v" 2>/dev/null
+        rpe=$("$RP" -n "$k" "$v" 2>&1); rpc=$?
         if [ "$(getprop "$k")" = "$v" ]; then fixed=$((fixed + 1)); continue; fi
+        # Once a session: why. The same call adds a new name from a root shell
+        # on this phone (owner, 11-12).
+        if [ -z "$rpd" ]; then
+            rpd=1
+            echo "guest_props: resetprop diag: $RP -n $k: exit $rpc, said '$(printf %s "$rpe" | head -c 300)', now '$(getprop "$k")', context $(getprop -Z "$k" 2>&1)"
+            pe=$("$RP" -n oneos.probe.add 1 2>&1); pc=$?
+            echo "guest_props: resetprop diag: probe oneos.probe.add: exit $pc, said '$(printf %s "$pe" | head -c 200)', now '$(getprop oneos.probe.add)', by resetprop '$("$RP" oneos.probe.add 2>&1 | head -c 100)', context $(getprop -Z oneos.probe.add 2>&1)"
+            echo "guest_props: resetprop diag: $(id 2>&1 | head -c 200); domain $(cat /proc/self/attr/current 2>/dev/null | tr -d '\0'); mnt $(readlink /proc/self/ns/mnt), init's $(readlink /proc/1/ns/mnt); enforce $(getenforce 2>&1)"
+            echo "guest_props: resetprop diag: $(ls -la "$RP" 2>&1); $(sha256sum "$RP" 2>/dev/null | cut -c1-16); mounts over /dev/__properties__: $(grep -c '__properties__' /proc/self/mountinfo); default_prop file: $(ls -laZ '/dev/__properties__/u:object_r:default_prop:s0' 2>&1)"
+        fi
         case "$k" in
             ro.config.isolated_compilation_enabled|qemu.hw.mainkeys|ro.arm64.memtag.bootctl_*)
                 held=$((held + 1)); heldn="$heldn $k"; continue ;;
