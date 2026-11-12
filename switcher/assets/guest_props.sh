@@ -1248,10 +1248,16 @@ add)
     # service before the guest's first process, the way that brought the blur
     # property back. Not from here: a persist. property set now would land in
     # One UI's own store, which is put aside only after this.
-    # Only the few this port needs go there. All 119 at once (2c01e30e) took
-    # the guest's zygote down inside a minute, and qemu.hw.mainkeys among them
-    # cannot be taken back at the return, which then restarts the phone.
-    fixed=0; left=0; held=0
+    # All 119 at once (2c01e30e) took the guest's zygote down inside a minute,
+    # and the return restarted the phone. Held back, by name:
+    # ro.config.isolated_compilation_enabled (true in the Pixel image: its
+    # SystemServer then starts com.android.server.compos's service, a class of
+    # the com.android.compos APEX the guest does not have), qemu.hw.mainkeys
+    # (the return's failsafe restarts the phone while it is the guest's) and
+    # ro.arm64.memtag.bootctl_* (owner: no memory tagging switches on a phone
+    # rooted for the boot only; a ro. one stays until the phone restarts).
+    # ONEOS_GUEST_PROPS_HOLD adds names to that (spaces between).
+    fixed=0; left=0; held=0; heldn=""
     rm -f "$STAGE/data/oneos_props_want"
     while IFS= read -r line; do
         k=${line%%=*}; v=${line#*=}
@@ -1260,12 +1266,13 @@ add)
         "$RP" -n "$k" "$v" 2>/dev/null
         if [ "$(getprop "$k")" = "$v" ]; then fixed=$((fixed + 1)); continue; fi
         case "$k" in
-            persist.dbg.volte_avail_ovr|ro.surface_flinger.supports_background_blur|ro.oneos.*) ;;
-            *) held=$((held + 1)); continue ;;
+            ro.config.isolated_compilation_enabled|qemu.hw.mainkeys|ro.arm64.memtag.bootctl_*)
+                held=$((held + 1)); heldn="$heldn $k"; continue ;;
         esac
+        case " ${ONEOS_GUEST_PROPS_HOLD:-} " in *" $k "*) held=$((held + 1)); heldn="$heldn $k"; continue ;; esac
         echo "$line" >> "$STAGE/data/oneos_props_want" 2>/dev/null; left=$((left + 1))
     done < "$NEW"
-    [ $((fixed + left + held)) = 0 ] || echo "guest_props: after the batch $fixed props were set one by one; $left are still missing and left to the guest's start (data/oneos_props_want); $held more are missing and stay so"
+    [ $((fixed + left + held)) = 0 ] || echo "guest_props: after the batch $fixed props were set one by one; $left are still missing and left to the guest's start (data/oneos_props_want); held back:${heldn:- none}"
     echo "guest_props add: batch done $(date +%T)"
     echo "guest_props: added $(wc -l < "$ADDED") props from the guest's build.prop files"
     rm -f "$HOST" "$NEW"
@@ -1473,6 +1480,20 @@ remove)
     rm -f "$STAGE/guest_props.deleted"
     { [ -f "$BLANKED" ] && cat "$BLANKED"; cat "$BLANKED.new"; } | sort -u > "$BLANKED.tmp" &&
         mv -f "$BLANKED.tmp" "$BLANKED" && echo "$BOOT_ID" > "$BLANKED.boot"
+    # Where resetprop neither blanks nor deletes (S24: the ones guest_start.sh
+    # had to set through setprop), init's property service blanks what is not
+    # ro.; a ro. one stays the guest's until the phone restarts and is named.
+    # persist. ones are restore-persist's, with One UI's store back.
+    sb=0; sl=""
+    while IFS= read -r key; do
+        case "$key" in ""|persist.*) continue ;; esac
+        [ -n "$(getprop "$key")" ] || continue
+        case "$key" in
+            ro.*) sl="$sl $key" ;;
+            *) setprop "$key" "" 2>/dev/null; if [ -z "$(getprop "$key")" ]; then sb=$((sb + 1)); else sl="$sl $key"; fi ;;
+        esac
+    done < "$ADDED"
+    [ "$sb" = 0 ] && [ -z "$sl" ] || echo "guest_props: resetprop left guest props set: $sb blanked through setprop; still the guest's until the phone restarts:${sl:- none}"
     rm -f "$ADDED" "$NOWF" "$BLANKED.new" "$STAGE/guest_props.stored" "$STAGE/guest_props.plan" "$STAGE/guest_props.blank"
     echo "guest_props: blanked $blanked guest props (their slots are reused next session), deleted $removed"
     ;;
