@@ -1498,6 +1498,19 @@ fi
 # the Fold's floats: a Z Fold5 or Flip5 (3.0) or an S23 (2.4) got half to two
 # thirds of the nits each step asked for. $2 is the panel's brightnessMaximum
 # (display_modes_host.log); outside 1.5..8 the Fold's own floats.
+# Automatic brightness ($3 = auto; S24 fork, 2026-11-12: the Pixel guest had no
+# adaptive brightness). An AOSP framework takes its lux curve and "automatic
+# brightness is available" from the image's own phone's vendor overlay, which
+# the guest does not have. So the config brings a lux curve of its own, in
+# nits and through the same table, as floats of this panel:
+# 4 nits in the dark, 60 at 100 lux, 210 at 1200 (a lit room), 520 at 10000
+# and up to 1000 in direct sun (the wide curve's slope, the panel's high
+# brightness range, as One UI uses it outdoors). The light sensor is the
+# phone's default one (no <lightSensor>). patches/guest_auto_brightness.py
+# makes a config with such a curve count without the resource, and the UI
+# activator shows the switch in Settings (oneos_switch.sh, /data/oneos_auto_brightness).
+# Not for Xiaomi's and vivo's frameworks, which have brightness code of their
+# own. ONEOS_GUEST_AUTO_BRIGHTNESS=0 leaves it out.
 ddc_xml() {
     cat <<'DDCEOF'
 <?xml version="1.0" encoding="utf-8"?>
@@ -1505,7 +1518,7 @@ ddc_xml() {
 <displayConfiguration>
     <screenBrightnessMap>
 DDCEOF
-    awk -v wide="$1" -v m="${2:-}" 'BEGIN {
+    awk -v wide="$1" -v m="${2:-}" -v auto="${3:-}" 'BEGIN {
         ref = 5.2980394; k = 1
         if (m + 0 >= 1.5 && m + 0 <= 8) k = ref / m
         n = split("0.0026:2.21 0.00333:3.0 0.005015:5.0 0.00694:7.5 0.008891:10.4 0.012079:15.0 0.015279:20.0 0.021151:30.0 0.026566:40.0 0.03701:60.0 0.045723:80.0 0.054391:100.0 0.068653:135.0 0.082069:170.0 0.093062:200.0 0.110574:250.0 0.127287:300.0 0.158918:400.0 0.188764:500.0 0.196299:520.0", pt, " ")
@@ -1517,9 +1530,28 @@ DDCEOF
         }
         # The top: the panel peak, 2600 nits on the Fold (490.75 per unit of brightnessMaximum).
         if (wide == "wide") printf "        <point><value>1.0</value><nits>%.1f</nits></point>\n", 2600.0 / k
+        printf "    </screenBrightnessMap>\n"
+        if (auto != "auto") exit
+        printf "    <autoBrightness enabled=\"true\">\n        <luxToBrightnessMapping>\n            <map>\n"
+        # The table again as float per nits; above its last point the slope to the peak.
+        for (i = 1; i <= n; i++) { split(pt[i], v, ":"); tf[i] = v[1] * k; tn[i] = v[2] + 0 }
+        peak = 2600.0 / k
+        c = split("0:4 1:6 2:8 4:11 8:15 15:21 30:30 60:45 100:60 200:85 400:120 700:160 1200:210 2000:270 4000:350 7000:430 10000:520 20000:650 35000:820 50000:1000", lx, " ")
+        last = -1
+        for (j = 1; j <= c; j++) {
+            split(lx[j], v, ":"); want = v[2] + 0
+            if (want <= tn[1]) f = tf[1] * want / tn[1]
+            else if (want >= tn[n]) f = tf[n] + (1.0 - tf[n]) * (want - tn[n]) / (peak - tn[n])
+            else for (i = 2; i <= n; i++) if (want <= tn[i]) { f = tf[i-1] + (tf[i] - tf[i-1]) * (want - tn[i-1]) / (tn[i] - tn[i-1]); break }
+            if (wide != "wide" && f > tf[n]) f = tf[n]
+            if (f > 0.999) f = 0.999
+            if (f < last) f = last
+            last = f
+            printf "                <point><first>%s</first><second>%.6g</second></point>\n", v[1], f
+        }
+        printf "            </map>\n        </luxToBrightnessMapping>\n    </autoBrightness>\n"
     }'
     cat <<'DDCEOF'
-    </screenBrightnessMap>
     <proxSensor>
         <type>com.samsung.sensor.physical_proximity</type>
     </proxSensor>
@@ -1527,6 +1559,7 @@ DDCEOF
 DDCEOF
 }
 PETC="$GUEST_PRODUCT/etc"
+rm -f "$STAGE/data/oneos_auto_brightness"
 if [ -e "$ROOTFS/system/framework/oplus-services.jar" ] || [ -L "$ROOTFS/system/framework/oplus-services.jar" ]; then
     :
 elif [ "${ONEOS_GUEST_DISPLAY_CONFIG:-1}" != 1 ]; then
@@ -1580,6 +1613,11 @@ else
         DDC_PROX=0
     fi
     [ -n "$DDC_PORTS" ] || echo "Display config: no panel ports from One UI's SurfaceFlinger (display_modes_host.log), none written"
+    DDC_AUTO=auto
+    if [ "${ONEOS_GUEST_AUTO_BRIGHTNESS:-1}" != 1 ] || [ -e "$ROOTFS/system/framework/vivo-services.jar" ] ||
+        [ -e "$ROOTFS/system_ext/framework/miui-services.jar" ] || [ -e "$ROOTFS/system/system_ext/framework/miui-services.jar" ]; then
+        DDC_AUTO=""
+    fi
     DDC_MAX=""
     for port in $DDC_PORTS; do
         # One UI's brightnessMaximum for this panel (dumpsys display, captured
@@ -1587,14 +1625,16 @@ else
         m=$(grep 'DisplayDeviceInfo{' "$STAGE/display_modes_host.log" 2>/dev/null | grep -E "port=$port[},]" |
             sed -n 's/.*brightnessMaximum \([0-9.]*\).*/\1/p' | head -n 1)
         DDC_MAX="$DDC_MAX $port:${m:-?}"
-        if [ $DDC_PROX = 1 ]; then ddc_xml $DDC_RANGE "$m"
-        else ddc_xml $DDC_RANGE "$m" | sed '/<proxSensor>/,/<\/proxSensor>/d'
+        if [ $DDC_PROX = 1 ]; then ddc_xml $DDC_RANGE "$m" $DDC_AUTO
+        else ddc_xml $DDC_RANGE "$m" $DDC_AUTO | sed '/<proxSensor>/,/<\/proxSensor>/d'
         fi > "$DOV/up/displayconfig/display_port_$port.xml"
     done
     chmod 755 "$DOV/up" "$DOV/up/displayconfig" && chmod 644 "$DOV/up/displayconfig/"*.xml
     $BB chcon -R u:object_r:system_file:s0 "$DOV/up" 2>/dev/null || true
     if $BB mount -t overlay overlay -o "ro,lowerdir=$DOV/up:$PETC" "$PETC"; then
-        echo "Display config: product/etc/displayconfig/display_port_ for ports ${DDC_PORTS:-none} (One UI's nits curve, brightnessMaximum${DDC_MAX:- none}$([ $DDC_PROX = 1 ] && echo ", Samsung's IR proximity"))"
+        echo "Display config: product/etc/displayconfig/display_port_ for ports ${DDC_PORTS:-none} (One UI's nits curve, brightnessMaximum${DDC_MAX:- none}$([ $DDC_PROX = 1 ] && echo ", Samsung's IR proximity")$([ -n "$DDC_AUTO" ] && echo ", a lux curve for automatic brightness"))"
+        # For the UI activator (oneos_switch.sh): the switch in Settings.
+        if [ -n "$DDC_AUTO" ] && [ -n "$DDC_PORTS" ]; then touch "$STAGE/data/oneos_auto_brightness"; fi
     else
         echo "Display config: read-only overlay on product/etc refused, left out"
     fi

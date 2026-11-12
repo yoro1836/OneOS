@@ -288,6 +288,8 @@ done
 # guest_no_gatekeeper's guard, so it runs after that loop; a framework of another
 # shape is left as it is (no guest lock there, as before).
 KEY_DIRS="$KEY_DIRS $(python3 -I "$ROOT/switcher/patches/guest_local_lock.py" "$WORK/services")"
+# Automatic brightness from the display config guest_prepare.sh writes (S24 fork).
+KEY_DIRS="$KEY_DIRS $(python3 -I "$ROOT/switcher/patches/guest_auto_brightness.py" "$WORK/services")"
 # The guest's own idmap2d instead of One UI's (patches/guest_own_idmap.py).
 KEY_DIRS="$KEY_DIRS $(python3 -I "$ROOT/switcher/patches/guest_own_idmap.py" "$WORK/services")"
 # A WebView zygote that cannot start is logged, not fatal (S24 Ultra, Find X9

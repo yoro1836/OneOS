@@ -3086,6 +3086,24 @@ while true; do
                         echo \"[UI Activator] AOD: no doze service named (lookup '\$DZC'); overlays on:\${DZON:- none}; now \$(timeout 20 $BB nsenter -t \$PID -m /system/bin/sh /data/oneos_genv.sh /system/bin/cmd overlay lookup android android:string/config_dozeComponent 2>/dev/null | head -n 1)\" ;;
                 esac
             fi
+            # Automatic brightness (S24 fork, 2026-11-12). guest_prepare.sh gave the
+            # panel's display config a lux curve (/data/oneos_auto_brightness) and
+            # patches/guest_auto_brightness.py lets it count in system_server; Settings
+            # and SystemUI still ask the resource the image's phone sets in its vendor
+            # overlay, so it is fabricated like the doze ones. Persistent in the guest's
+            # data; ONEOS_GUEST_AUTO_BRIGHTNESS=0 (no lux curve) takes it away again.
+            if [ $GUEST_AOSP_SYSUI = 1 ]; then
+                ABV=\$(timeout 20 $BB nsenter -t \$PID -m /system/bin/sh /data/oneos_genv.sh /system/bin/cmd overlay lookup android android:bool/config_automatic_brightness_available 2>/dev/null | tr -d '\r' | head -n 1)
+                if [ -f \"$STAGE/data/oneos_auto_brightness\" ]; then
+                    if [ \"\$ABV\" != true ]; then
+                        gxo fabricate --target android --name OneOSAutoBrightness android:bool/config_automatic_brightness_available 0x12 0xffffffff &&
+                            gxo enable --user 0 com.android.shell:OneOSAutoBrightness
+                    fi
+                    echo \"[UI Activator] Automatic brightness: the resource was '\$ABV', now \$(timeout 20 $BB nsenter -t \$PID -m /system/bin/sh /data/oneos_genv.sh /system/bin/cmd overlay lookup android android:bool/config_automatic_brightness_available 2>/dev/null | tr -d '\r' | head -n 1)\"
+                else
+                    gxo disable --user 0 com.android.shell:OneOSAutoBrightness
+                fi
+            fi
             # Fold test (fold layout only). On every lid switch event record what
             # the guest did: device state, layout, both touch mappers and
             # backlights, a screenshot of display 0, and after folding 10 s of
