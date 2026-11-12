@@ -139,7 +139,11 @@ baseline)
     # Keep the host's persisted list intact even if an older kernel prunes its
     # live table after seeing a guest package event. Keep this read-only bind
     # until reboot on an audit failure; remove it only after a matching audit.
-    if [ -f /data/adb/ksu/.allowlist ] && [ ! -L /data/adb/ksu/.allowlist ]; then
+    # Still protected from a session of this boot that returned in place with
+    # changed grants (verify-return): the same bind serves this session.
+    ALP=0
+    if grep -q ' /data/adb/ksu/\.allowlist ' /proc/self/mountinfo 2>/dev/null; then ALP=1; : > "$B/allowlist.protected"; fi
+    if [ -f /data/adb/ksu/.allowlist ] && [ ! -L /data/adb/ksu/.allowlist ] && [ "${ALP:-0}" = 0 ]; then
         cp /data/adb/ksu/.allowlist "$B/allowlist.saved"
         busy=''
         for x in /data/adb/ksu/bin/busybox /data/adb/ap/bin/busybox /data/adb/magisk/busybox; do [ ! -x "$x" ] || { busy=$x; break; }; done
@@ -179,7 +183,20 @@ verify-return)
     [ "$(cat "$B/boot")" = "$(cat /proc/sys/kernel/random/boot_id)" ] || exit 1
     "$S/guest_root" --host-audit > "$B/return.unsorted" || exit 1
     sort "$B/return.unsorted" > "$B/return.root"
-    cmp -s "$B/root" "$B/return.root" || { echo 'Guest runtime: host root grants or manager changed'; exit 1; }
+    # The root manager's live grant table differs (Galaxy S24, KernelSU, every
+    # session of 2026-11-12). The reboot this asked for costs a phone with
+    # temporary root its root altogether, and the saved list on disk is still
+    # behind its read-only bind, so: say what changed and return in place; the
+    # bind stays until a reboot. Policy and kernel modules below still decide.
+    # $STATE/strict_return brings the reboot back.
+    GC=0
+    if ! cmp -s "$B/root" "$B/return.root"; then
+        echo 'Guest runtime: host root grants or manager changed'
+        echo "Guest runtime: at the switch: $(tr '\n' ';' < "$B/root" | head -c 1500)"
+        echo "Guest runtime: at the return: $(tr '\n' ';' < "$B/return.root" | head -c 1500)"
+        [ ! -f "$STATE/strict_return" ] || exit 1
+        GC=1
+    fi
     sha256sum -c "$B/selinux" || { echo 'Guest runtime: shared SELinux policy changed'; exit 1; }
     [ ! -f "$B/allowlist" ] || sha256sum -c "$B/allowlist" || exit 1
     awk '{print $1, $2, $6}' /proc/modules | sort > "$B/return.kernel-modules"
@@ -190,6 +207,10 @@ verify-return)
             [ "$(awk '{print $22}' "/proc/$pid/stat")" = "$start" ] || { echo 'Host framework process identity changed'; exit 1; }
             kill -CONT "$pid" || exit 1
         done < "$B/host-frameworks"
+    fi
+    if [ "$GC" = 1 ]; then
+        echo 'Guest runtime: SELinux policy and kernel modules match baseline; returning in place with the changed grants (the saved grant list stays protected until a reboot; grant again in the root manager if an app lost root)'
+        exit 0
     fi
     if [ -f "$B/allowlist.protected" ]; then
         umount /data/adb/ksu/.allowlist || exit 1

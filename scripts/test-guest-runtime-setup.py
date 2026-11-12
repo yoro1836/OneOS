@@ -54,4 +54,27 @@ class PrivateBindTest(unittest.TestCase):
  def test_private_root_and_modules_match(self):self.check_bind('valid')
  def test_host_adb_view_is_rejected(self):self.check_bind('wrong-root')
  def test_nested_modules_overmount_is_rejected(self):self.check_bind('wrong-modules')
+ def run_return(self,same,strict=False,policy_ok=True):
+  with tempfile.TemporaryDirectory() as d:
+   S=Path(d);B=S/'tmp/guest_runtime_baseline';B.mkdir(parents=True);(S/'data/oneos_root').mkdir(parents=True)
+   (S/'data/oneos_root/enabled').write_text('')
+   if strict:(S/'data/oneos_root/strict_return').write_text('')
+   (B/'ready').write_text('');(B/'boot').write_text(Path('/proc/sys/kernel/random/boot_id').read_text())
+   (B/'root').write_text('allow 10300 unmount=0\nmanager 10250\n')
+   now='manager 10250\nallow 10300 unmount=0\n' if same else 'manager 10250\n'
+   (S/'guest_root').write_text('#!/bin/sh\nprintf "'+now.replace('\n','\\n')+'"\n');(S/'guest_root').chmod(0o755)
+   pol=S/'policy';pol.write_text('p')
+   (B/'selinux').write_text(subprocess.run(['sha256sum',str(pol)],capture_output=True,text=True).stdout)
+   if not policy_ok:pol.write_text('q')
+   mods=subprocess.run("awk '{print $1, $2, $6}' /proc/modules | sort",shell=True,capture_output=True,text=True).stdout
+   (B/'kernel-modules').write_text(mods)
+   r=subprocess.run(['sh',str(ROOT/'switcher/assets/guest_runtime.sh'),'verify-return'],env={**os.environ,'STAGE':d},capture_output=True,text=True)
+   return r.returncode,r.stdout
+ def test_matching_grants_return_in_place(self):
+  rc,out=self.run_return(True);self.assertEqual(0,rc,out);self.assertIn('match baseline',out);self.assertNotIn('changed',out)
+ def test_changed_grants_are_said_and_still_return_in_place(self):
+  rc,out=self.run_return(False);self.assertEqual(0,rc,out)
+  self.assertIn('at the switch: allow 10300 unmount=0;manager 10250;',out);self.assertIn('at the return: manager 10250;',out);self.assertIn('returning in place',out)
+ def test_strict_return_and_a_changed_policy_still_reboot(self):
+  self.assertEqual(1,self.run_return(False,strict=True)[0]);self.assertEqual(1,self.run_return(False,policy_ok=False)[0])
 if __name__=='__main__': unittest.main()
