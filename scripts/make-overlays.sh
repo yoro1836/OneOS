@@ -290,6 +290,15 @@ done
 KEY_DIRS="$KEY_DIRS $(python3 -I "$ROOT/switcher/patches/guest_local_lock.py" "$WORK/services")"
 # Automatic brightness from the display config guest_prepare.sh writes (S24 fork).
 KEY_DIRS="$KEY_DIRS $(python3 -I "$ROOT/switcher/patches/guest_auto_brightness.py" "$WORK/services")"
+# The phone's fingerprint sensor, read only: no removal, invalidation or
+# enrolment from the guest (patches/guest_fingerprint_readonly.py, S24 fork).
+# guest_prepare.sh turns the guest's fingerprint service on only with this
+# guard; a framework of another shape goes without both.
+FPRO=0
+if NEW=$(python3 -I "$ROOT/switcher/patches/guest_fingerprint_readonly.py" "$WORK/services"); then
+    KEY_DIRS="$KEY_DIRS $NEW"
+    FPRO=1
+fi
 # The guest's own idmap2d instead of One UI's (patches/guest_own_idmap.py).
 KEY_DIRS="$KEY_DIRS $(python3 -I "$ROOT/switcher/patches/guest_own_idmap.py" "$WORK/services")"
 # A WebView zygote that cannot start is logged, not fatal (S24 Ultra, Find X9
@@ -1004,6 +1013,7 @@ python3 -I "$ROOT/scripts/check-dex.py" $JARS
 # looks up "gvld": guest_prepare.sh binds all three or none of them.
 {
     echo "# framework overlays built by scripts/make-overlays.sh with the storage, installd, power, sysrq, weaver, biometric, gatekeeper, pdb, apexd, appid15000, nousers, nativeservices, wipesecrets and ksuappid guards, and the secims carve-out (com.sec.imsservice kept in android.uid.system from /system_ext/priv-app/OneOSSecIms only)"
+    [ "$FPRO" = 1 ] && echo "# fpreadonly guard: the phone's fingerprint templates are not removed, invalidated or added to (patches/guest_fingerprint_readonly.py)"
     [ "$VOLD_GVLD" = 1 ] && echo "# guest vold name: gvld (vold_patched, service.incremental_patched.so and services_patched.jar)"
     # HyperOS images (miui-services_patched.jar) and Pixel images list their
     # files in the order and with the notes each set was built with.

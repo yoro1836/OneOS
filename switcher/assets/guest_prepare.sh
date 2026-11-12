@@ -1656,6 +1656,21 @@ else
         else ddc_xml $DDC_RANGE "$m" "$DDC_AUTO" "$DDC_PANEL" | sed '/<proxSensor>/,/<\/proxSensor>/d'
         fi > "$DOV/up/displayconfig/display_port_$port.xml"
     done
+    # The phone's fingerprint sensor for the guest's lock screen (S24 fork, after
+    # upstream PR 152). The guest's vendor is One UI's, with Samsung's
+    # IFingerprint, but FingerprintService starts only with this feature, which
+    # One UI declares in its own /system ("Fingerprint configuration exists, but
+    # FingerprintService is null", run 41). Only with the fpreadonly guard
+    # (patches/guest_fingerprint_readonly.py): without it the guest could remove
+    # One UI's fingerprints from the sensor. ONEOS_GUEST_FINGERPRINT=0 leaves it off.
+    if [ "${ONEOS_GUEST_FINGERPRINT:-1}" = 1 ] && grep '^#' "$STAGE/guards.txt" | grep -qw fpreadonly &&
+       grep '^#' "$STAGE/guards.txt" | grep -qw biometric; then
+        mkdir -p "$DOV/up/permissions" &&
+            printf '%s\n' '<?xml version="1.0" encoding="utf-8"?>' '<permissions>' '    <feature name="android.hardware.fingerprint" />' '</permissions>' > "$DOV/up/permissions/oneos-fingerprint.xml" &&
+            chmod 755 "$DOV/up/permissions" && chmod 644 "$DOV/up/permissions/oneos-fingerprint.xml"
+    else
+        rm -rf "$DOV/up/permissions"
+    fi
     chmod 755 "$DOV/up" "$DOV/up/displayconfig" && chmod 644 "$DOV/up/displayconfig/"*.xml
     $BB chcon -R u:object_r:system_file:s0 "$DOV/up" 2>/dev/null || true
     if $BB mount -t overlay overlay -o "ro,lowerdir=$DOV/up:$PETC" "$PETC"; then
@@ -3857,6 +3872,32 @@ mkdir -p "$STAGE/data/anr" "$STAGE/data/app" "$STAGE/data/rollback" "$STAGE/data
 # The guest's own shared storage. Never the phone's /data/media: in run 25 the
 # guest's cleanup of a user it could not prepare deleted the photos in it.
 mkdir -p "$STAGE/data/media/0" "$STAGE/data/media/obb" "$STAGE/data/vendor_de/0" "$STAGE/data/vendor_ce/0"
+# The guest unlocks with the fingerprints One UI enrolled: the templates stay in
+# the phone's TEE, and the guest cannot enrol (no gatekeeper token) or remove
+# (fpreadonly guard). Its framework only needs One UI's list of them, the same
+# file name on both sides (settings_fingerprint_<sensor id>.xml), copied at
+# every switch so that a print removed in One UI is gone here too. Not before
+# the guest made its user folder (the first start has no screen lock anyway).
+BIO_DST="$STAGE/data/system/users/0"
+if [ -f "$PETC/permissions/oneos-fingerprint.xml" ]; then
+    mkdir -p "$STAGE/data/vendor_de/0/fpdata"
+    chown 1000:1000 "$STAGE/data/vendor_de/0/fpdata" 2>/dev/null; chmod 700 "$STAGE/data/vendor_de/0/fpdata" 2>/dev/null
+    $BB chcon u:object_r:fingerprint_vendor_data_file:s0 "$STAGE/data/vendor_de/0/fpdata" 2>/dev/null || true
+    bio=0
+    if [ -d "$BIO_DST" ]; then
+        rm -f "$BIO_DST"/settings_fingerprint_*.xml
+        for f in ${ONEOS_HOST_USER_DIR:-/data/system/users/0}/settings_fingerprint_*.xml; do
+            [ -f "$f" ] || continue
+            out="$BIO_DST/${f##*/}"
+            cp -f "$f" "$out" && chown 1000:1000 "$out" 2>/dev/null && chmod 600 "$out" 2>/dev/null &&
+                bio=$((bio + 1))
+            $BB chcon -h u:object_r:system_data_file:s0 "$out" 2>/dev/null || true
+        done
+    fi
+    echo "Guest fingerprint: on, the phone's sensor read only; $bio list(s) of One UI's fingerprints carried over (add and remove fingerprints in One UI)"
+else
+    echo "Guest fingerprint: off (ONEOS_GUEST_FINGERPRINT=${ONEOS_GUEST_FINGERPRINT:-1}, the fpreadonly guard, or no product/etc overlay)"
+fi
 
 # OneOS: without OneLineage's LineageOS packages (Launcher3, LatinIME,
 # LineageSettings; ColorOS has none of them) and with the OneOS app in place

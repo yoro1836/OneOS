@@ -208,6 +208,18 @@ if [ -n "$BB" ] && [ -n "$gp" ] && [ ! -L "$DR" ] && rm -rf "$DR" 2>/dev/null &&
       done
       echo "audio HAL pid: $(timeout 3 dumpsys --pid android.hardware.audio.core.IModule/default 2>/dev/null | head -n 1)"
     } > "$DR/bt_props.txt" 2>&1
+    # The guest's fingerprint service on the phone's sensor (S24 fork): what
+    # Samsung's HAL told it (sensor type, where on the panel) and how unlocks went.
+    { echo "== sensor position (sysfs): $(cat /sys/class/fingerprint/fingerprint/position 2>&1)"
+      echo '== dumpsys fingerprint'; gd fingerprint | head -n 80
+      echo '== dumpsys biometric'; gd biometric | head -n 60
+      echo '== SystemUI'; gd activity service com.android.systemui | "$BB" grep -a -i -E 'udfps|sfps|fingerprint|sensorProps|sensorLocation' | head -n 80
+      echo '== log'
+      for f in /data/local/tmp/oneos_logs/boot.log.01 /data/local/tmp/oneos_logs/boot.log; do
+          [ -f "$f" ] && "$BB" grep -a -E 'Fingerprint|Udfps|UDFPS|BiometricService|AuthService|BiometricScheduler|OneOS: ' "$f"
+      done | tail -n 300
+    } > "$DR/fingerprint.txt" 2>&1 &
+    p9=$!
     # Google sign-in (S24, Pixel: the sign-in screen closes at once). From the
     # session's logcat files (oneos_switch.sh's capture): "logcat -d" in the
     # diag rounds gave nothing on that phone (205c1903: an empty crash buffer
@@ -223,7 +235,7 @@ if [ -n "$BB" ] && [ -n "$gp" ] && [ ! -L "$DR" ] && rm -rf "$DR" 2>/dev/null &&
       timeout 10 logcat -d -b main,system -t 40000 2>/dev/null | "$BB" grep -a -E "$PAT" | tail -n 200
     } > "$DR/signin.txt" 2>&1 &
     p8=$!
-    wait $p1 $p2 $p3 $p4 $p5 $p6 $p7 $p8 2>/dev/null
+    wait $p1 $p2 $p3 $p4 $p5 $p6 $p7 $p8 $p9 2>/dev/null
     echo "$(date +%T) Guest Bluetooth, audio and location at the return (pid $gp's namespace): $(ls "$DR" 2>/dev/null | tr '\n' ' ')in $DR"
 else
     why="no guest surfaceflinger or system_server"
