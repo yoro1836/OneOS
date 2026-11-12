@@ -13,7 +13,7 @@ encryption, or a credential the keystore knows. A restart of the phone goes back
 which has no lock, and root there reaches the guest's data and can remove the record (that is
 also the way out of a forgotten lock: delete oneos_guest_lock* in the guest's data/system).
 
-Six changes, all or none:
+Seven changes, all or none:
 
 1. LockSettingsService.setLockCredentialInternal: in front of the gatekeeper guard, the added
    method oneosGuestLockSet asks OneOSGuestLock.change() for user 0. Done -> true (the public
@@ -45,6 +45,12 @@ Six changes, all or none:
    token, which the guest lock cannot give (ColorOS SystemUI throws on the missing token). So
    such prompts answer what they answer today, without a lock: no credential enrolled. A
    constant on the register, because classes.dex has no room for a new method reference.
+
+7. LockSettingsService.getPinLength: the length of the guest PIN when the record keeps it (six
+   or more digits). The lock screen confirms such a PIN without the enter key when it has as
+   many digits as this says; with the framework's own "not known" (Pixel, 2026-11-12) it took
+   every digit typed for a guess, and the wrong guesses ran into the wait. A tree that has the
+   first six changes only gets this one, and the helper of today, on the next run.
 
 Apps therefore see a secure, lockable device (KeyguardManager), but nothing that needs the
 keystore's idea of the user's credential: keys bound to user authentication cannot be made, as
@@ -83,6 +89,7 @@ SLOG = "Landroid/util/Slog;"
 
 # What a patched tree still shows after the jar was built and decoded again.
 MARK = "oneosGuestLockVerify"
+PIN_MARK = "->pinLength(I)I"
 KEYSTORE_TEXT = "OneOS: the guest lock state is not sent to the keystore of the phone"
 GUARD_TEXT = '"OneOS: the screen lock is the phone'
 
@@ -219,6 +226,40 @@ def type_hook(result, spare):
 
     goto :oneos_gl_type_done""".split("\n")
     return front, back
+
+
+PIN_HOOK = f"""\
+    # OneOS: the length of the guest's own PIN when its record keeps one
+    # (patches/guest_local_lock.py); below zero the framework answers as before.
+    :oneos_gl_pin_start
+    invoke-static {{p1}}, {HELPER}->pinLength(I)I
+
+    move-result v0
+    :oneos_gl_pin_end
+    .catch Ljava/lang/Throwable; {{:oneos_gl_pin_start .. :oneos_gl_pin_end}} :oneos_gl_pin_catch
+
+    if-ltz v0, :oneos_gl_pin_native
+
+    return v0
+
+    :oneos_gl_pin_catch
+    move-exception v0
+
+    :oneos_gl_pin_native""".split("\n")
+
+
+def pin_edit(lines, rel):
+    """(at, at, lines) for getPinLength: behind its permission check when it starts with one."""
+    i, end, n_locals = method(lines, "getPinLength", "(I)I", rel)
+    if n_locals < 1:
+        raise Skip(f"{rel}: getPinLength has no free register")
+    body = code(lines, i, end)
+    if body and re.fullmatch(r"invoke-(?:direct|virtual) \{p0\}, " + re.escape(LSS)
+                             + r"->checkHavePermission\(\)V", body[0][1]):
+        at = body[0][0] + 1
+        return at, at, [""] + PIN_HOOK
+    at = entry(lines, i)
+    return at, at, PIN_HOOK
 
 
 FRP_HOOK = """\
@@ -536,6 +577,9 @@ def patch_lss(lines, rel, pkg_text):
     # 4. The FRP check.
     f_at = entry(lines, f_i)
 
+    # 7. The PIN's length.
+    pin = pin_edit(lines, rel)
+
     edits = [
         (s_at, s_at, set_hook()),
         (v_at, v_at, verify_hook()),
@@ -543,6 +587,7 @@ def patch_lss(lines, rel, pkg_text):
         (t_code[-2][0] + 1, t_code[-2][0] + 1, front),
         (t_code[-1][0] + 1, t_code[-1][0] + 1, back),
         (f_at, f_at, FRP_HOOK),
+        pin,
     ]
     for first, last, new in sorted(edits, reverse=True):
         lines[first:last] = new
@@ -611,8 +656,23 @@ def main(root, helper):
                 any(os.path.isfile(os.path.join(root, d, PKG, HELPER_NAME))
                     for d in os.listdir(root) if d.startswith("smali"))]
         if all(have):
-            print("guest_local_lock: this services.jar already has the guest screen lock",
+            if PIN_MARK in text[LSS_REL]:
+                print("guest_local_lock: this services.jar already has the guest screen lock",
+                      file=sys.stderr)
+                return
+            # The lock of before the PIN length: that one change, and today's helper.
+            lines = text[LSS_REL].split("\n")
+            first, last, new = pin_edit(lines, LSS_REL)
+            lines[first:last] = new
+            old = [d for d in sorted(os.listdir(root)) if d.startswith("smali")
+                   and os.path.isfile(os.path.join(root, d, PKG, HELPER_NAME))]
+            with open(paths[LSS_REL], "w") as f:
+                f.write("\n".join(lines))
+            shutil.copy(helper, os.path.join(root, old[0], PKG, HELPER_NAME))
+            print("guest_local_lock: LockSettingsService PIN length; OneOSGuestLock",
                   file=sys.stderr)
+            for d in sorted({dirs[LSS_REL], old[0]}):
+                print(d)
             return
         if any(have):
             fail("parts of the guest screen lock are already in this tree")

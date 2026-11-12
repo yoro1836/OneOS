@@ -24,8 +24,10 @@ import javax.crypto.spec.SecretKeySpec;
  * restart of the phone goes back to One UI, where root can remove the record (that is also the
  * way out of a forgotten lock). The record keeps a salted, slow hash, never the credential.
  *
- * Record, one ASCII line: "1 <type> <iterations> <salt hex> <hash hex>", written to a temporary
- * file, synced and renamed. hash = PBKDF2-HMAC-SHA256 over the lower-case hex of
+ * Record, one ASCII line: "1 <type> <iterations> <salt hex> <hash hex>[ <PIN length>]", written
+ * to a temporary file, synced and renamed. The length is there for a PIN of six or more digits
+ * only, as on a phone with a real lock: the lock screen asks for it (getPinLength) to confirm such
+ * a PIN without the enter key, and without it would try every digit as a guess of its own. hash = PBKDF2-HMAC-SHA256 over the lower-case hex of
  * SHA-256(credential), 32 bytes. A record that cannot be read counts as no lock.
  *
  * Tries, one ASCII line: "<failures> <deadline, wall clock ms>". The count goes up before a guess
@@ -60,6 +62,8 @@ public final class OneOSGuestLock {
 
     static final int ITERATIONS = 100000;
     static final int MIN_LENGTH = 4;
+    /** LockPatternUtils.MIN_AUTO_PIN_REQUIREMENT_LENGTH: shorter PINs are never auto-confirmed. */
+    static final int MIN_AUTO_PIN_LENGTH = 6;
     static final String RECORD = "oneos_guest_lock";
     static final String TRIES = "oneos_guest_lock.tries";
     private static final int MAX_FAILURES = 1000000;
@@ -70,6 +74,8 @@ public final class OneOSGuestLock {
     private static int sIterations;
     private static byte[] sSalt;
     private static byte[] sHash;
+    /** The length of a PIN of six or more digits; -1 when it is not kept. */
+    private static volatile int sPinLength = -1;
     private static boolean sTriesLoaded;
     private static int sFailures;
     /** Elapsed-realtime ms until which no guess is looked at; 0 when no wait is running. */
@@ -85,6 +91,7 @@ public final class OneOSGuestLock {
         sType = TYPE_NONE;
         sSalt = null;
         sHash = null;
+        sPinLength = -1;
         sTriesLoaded = false;
         sFailures = 0;
         sLockedUntil = 0;
@@ -108,6 +115,26 @@ public final class OneOSGuestLock {
             return type != TYPE_NONE ? type : nativeType;
         } catch (Throwable t) {
             return nativeType;
+        }
+    }
+
+    /**
+     * What ILockSettings.getPinLength() answers first: the length of user 0's guest PIN when it
+     * is kept (six or more digits), else -1 and the framework's own answer follows.
+     */
+    public static int pinLength(int userId) {
+        if (userId != 0) {
+            return -1;
+        }
+        try {
+            if (!sLoaded) {
+                synchronized (OneOSGuestLock.class) {
+                    loadRecord();
+                }
+            }
+            return sType == TYPE_PIN ? sPinLength : -1;
+        } catch (Throwable t) {
+            return -1;
         }
     }
 
@@ -146,7 +173,9 @@ public final class OneOSGuestLock {
                 return -2L - left;
             }
             sLockedUntil = 0;
-            if (credential == null || credential.length == 0) {
+            // Shorter than anything that can be set: wrong, and not a guess that counts (a lock
+            // screen that does not know the PIN's length sends every digit as it is typed).
+            if (credential == null || credential.length < MIN_LENGTH) {
                 return 1L;
             }
             int failures = sFailures < MAX_FAILURES ? sFailures + 1 : MAX_FAILURES;
@@ -163,6 +192,13 @@ public final class OneOSGuestLock {
             sFailures = 0;
             sLockedUntil = 0;
             new File(sDir, TRIES).delete();
+            if (sType == TYPE_PIN && sPinLength < 0 && credential.length >= MIN_AUTO_PIN_LENGTH) {
+                // A record from before the length was kept.
+                if (writeFile(RECORD, line(sType, sIterations, sSalt, sHash, credential.length),
+                        true)) {
+                    sPinLength = credential.length;
+                }
+            }
             return MATCH;
         } catch (Throwable t) {
             return 1L;
@@ -200,8 +236,9 @@ public final class OneOSGuestLock {
             byte[] salt = new byte[16];
             new SecureRandom().nextBytes(salt);
             byte[] hash = derive(newCredential, salt, ITERATIONS);
-            String line = "1 " + newType + " " + ITERATIONS + " " + hex(salt) + " " + hex(hash)
-                    + "\n";
+            int pinLength = newType == TYPE_PIN && newCredential.length >= MIN_AUTO_PIN_LENGTH
+                    ? newCredential.length : -1;
+            String line = line(newType, ITERATIONS, salt, hash, pinLength);
             Arrays.fill(hash, (byte) 0);
             if (!writeFile(RECORD, line, true)) {
                 return CHANGE_REFUSED;
@@ -209,7 +246,7 @@ public final class OneOSGuestLock {
             // What is on the disk is what the next unlock gets: read it back and try it.
             sLoaded = false;
             loadRecord();
-            boolean good = sType == newType;
+            boolean good = sType == newType && sPinLength == pinLength;
             if (good) {
                 byte[] again = derive(newCredential, sSalt, sIterations);
                 good = MessageDigest.isEqual(again, sHash);
@@ -228,6 +265,12 @@ public final class OneOSGuestLock {
         }
     }
 
+    private static String line(int type, int iterations, byte[] salt, byte[] hash,
+            int pinLength) {
+        return "1 " + type + " " + iterations + " " + hex(salt) + " " + hex(hash)
+                + (pinLength > 0 ? " " + pinLength : "") + "\n";
+    }
+
     private static boolean forget() {
         File record = new File(sDir, RECORD);
         record.delete();
@@ -239,6 +282,7 @@ public final class OneOSGuestLock {
         sType = TYPE_NONE;
         sSalt = null;
         sHash = null;
+        sPinLength = -1;
         sFailures = 0;
         sLockedUntil = 0;
         sLoaded = true;
@@ -253,11 +297,12 @@ public final class OneOSGuestLock {
         int iterations = 0;
         byte[] salt = null;
         byte[] hash = null;
+        int pinLength = -1;
         try {
             String text = readFile(RECORD);
             if (text != null) {
                 String[] f = text.trim().split(" ");
-                if (f.length == 5 && f[0].equals("1")) {
+                if ((f.length == 5 || f.length == 6) && f[0].equals("1")) {
                     int t = Integer.parseInt(f[1]);
                     int n = Integer.parseInt(f[2]);
                     byte[] s = unhex(f[3]);
@@ -269,12 +314,20 @@ public final class OneOSGuestLock {
                         iterations = n;
                         salt = s;
                         hash = h;
+                        if (f.length == 6 && t == TYPE_PIN) {
+                            int l = Integer.parseInt(f[5]);
+                            if (l >= MIN_AUTO_PIN_LENGTH && l <= 64) {
+                                pinLength = l;
+                            }
+                        }
                     }
                 }
             }
         } catch (Throwable t) {
             type = TYPE_NONE;
+            pinLength = -1;
         }
+        sPinLength = pinLength;
         sIterations = iterations;
         sSalt = salt;
         sHash = hash;

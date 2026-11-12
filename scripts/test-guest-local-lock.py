@@ -187,6 +187,22 @@ def lss_text(guard='decoded', type_body='plain', helpers='private'):
 {TYPE_BODIES[type_body]}
 .end method
 
+.method public getPinLength(I)I
+    .locals 5
+
+    .line 1513
+    invoke-virtual {{p0}}, {LSS}->checkHavePermission()V
+
+    .line 1514
+    invoke-virtual {{p0, p1}}, {LSS}->getUserPasswordMetrics(I)Landroid/app/admin/PasswordMetrics;
+
+    move-result-object v0
+
+    const/4 p0, -0x1
+
+    return p0
+.end method
+
 .method public requireStrongAuth(II)V
     .locals 0
 
@@ -414,7 +430,7 @@ class PatcherTest(unittest.TestCase):
         self.assertEqual(text.count('\n.method '), text.count('\n.end method'))
         helper = SMALI.read_text()
         calls = set(re.findall(re.escape(HELPER) + r'->([A-Za-z]+\([^)]*\)\S+)', text))
-        self.assertEqual({c.split('(')[0] for c in calls}, {'change', 'verify', 'credentialType'})
+        self.assertEqual({c.split('(')[0] for c in calls}, {'change', 'verify', 'credentialType', 'pinLength'})
         for call in calls:
             self.assertRegex(helper, r'(?m)^\.method public static (declared-synchronized )?'
                              + re.escape(call) + '$')
@@ -427,6 +443,47 @@ class PatcherTest(unittest.TestCase):
         for needs in ('->OK:', '->credIncorrect(', '->fromTimeout(', '->requireStrongAuth(II)V',
                       '->reportSuccessfulStrongAuthUnlock(I)V', '->onCredentialVerified()V'):
             self.assertIn(needs, added)
+
+    def test_the_pin_length_comes_from_the_guest_lock_behind_the_permission_check(self):
+        self.patched()
+        got = body(self.read(LSS_FILE), ' getPinLength(I)I')
+        self.assertEqual(got[:9], [
+            f'invoke-virtual {{p0}}, {LSS}->checkHavePermission()V',
+            ':oneos_gl_pin_start',
+            f'invoke-static {{p1}}, {HELPER}->pinLength(I)I',
+            'move-result v0',
+            ':oneos_gl_pin_end',
+            'if-ltz v0, :oneos_gl_pin_native',
+            'return v0',
+            ':oneos_gl_pin_catch',
+            'move-exception v0',
+        ])
+        self.assertEqual(got[9], ':oneos_gl_pin_native')
+        self.assertIn('getUserPasswordMetrics', got[10])
+        self.assertIn('.catch Ljava/lang/Throwable; {:oneos_gl_pin_start .. :oneos_gl_pin_end} '
+                      ':oneos_gl_pin_catch', self.read(LSS_FILE))
+
+    def test_a_lock_of_before_the_pin_length_gets_it_and_the_helper_of_today(self):
+        self.patched()
+        want = snapshot(self.root)
+        # As the first Pixel jar was: no PIN length, an older helper, in a dex of its own.
+        lines = self.read(LSS_FILE).split('\n')
+        first = lines.index('    # OneOS: the length of the guest\'s own PIN when its record keeps one')
+        last = lines.index('    :oneos_gl_pin_native')
+        del lines[first - 1:last + 1]
+        (self.root / LSS_FILE).write_text('\n'.join(lines))
+        self.assertNotIn('pinLength', self.read(LSS_FILE))
+        moved = self.root / 'smali_classes4' / PKG
+        moved.mkdir(parents=True)
+        (self.root / HELPER_FILE).unlink()
+        (moved / 'OneOSGuestLock.smali').write_text('.class old\n')
+        done = patch(self.root)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(done.stdout.split(), ['smali_classes2', 'smali_classes4'])
+        got = snapshot(self.root)
+        self.assertEqual(got.pop('smali_classes4/' + PKG + '/OneOSGuestLock.smali'), SMALI.read_text())
+        want.pop(HELPER_FILE)
+        self.assertEqual(got, want)
 
     def test_public_helpers_of_the_class_are_called_virtually(self):
         self.patched(lss=lss_text(helpers='public'))
@@ -558,6 +615,7 @@ public final class GuestLockDriver {
             case "waits": waits(); break;
             case "restarts": restarts(); break;
             case "damaged": damaged(); break;
+            case "pinlength": pinLength(); break;
             default: throw new AssertionError("no scenario " + a[0]);
         }
         System.out.println("PASS " + a[0]);
@@ -611,6 +669,51 @@ public final class GuestLockDriver {
         yes(!has(RECORD) && !has(TRIES) && !has(RECORD + ".tmp"), "no files left");
         restart();
         eq(-1, type(), "and none after a restart");
+    }
+
+    static void pinLength() throws Exception {
+        byte[] six = b("258025");
+        eq(-1, OneOSGuestLock.pinLength(0), "no lock: no length");
+        eq(1, set(3, PIN, null), "set four digits");
+        eq(-1, OneOSGuestLock.pinLength(0), "four digits: the length is not kept");
+        yes(text(RECORD).trim().split(" ").length == 5, "and not written");
+        eq(1, set(3, six, PIN), "set six digits");
+        eq(6, OneOSGuestLock.pinLength(0), "six digits: the length");
+        eq(-1, OneOSGuestLock.pinLength(10), "not for other users");
+        yes(text(RECORD).matches("1 3 100000 [0-9a-f]{32} [0-9a-f]{64} 6\n"), "record with length");
+        restart();
+        eq(6, OneOSGuestLock.pinLength(0), "the length survives a restart");
+        // What a lock screen without the length sent: every digit as it was typed.
+        eq(1, check(b("2")), "one digit is wrong");
+        eq(1, check(b("25")), "two digits are wrong");
+        eq(1, check(b("258")), "three digits are wrong");
+        yes(!has(TRIES), "and none of them counts");
+        eq(1, check(b("2580")), "four digits are a guess");
+        yes(text(TRIES).equals("1 0\n"), "that counts");
+        eq(0, check(six), "the PIN matches");
+
+        // A record of before the length was kept gets it with the first match.
+        String line = text(RECORD);
+        put(RECORD, line.trim().substring(0, line.trim().length() - 2) + "\n");
+        restart();
+        eq(3, type(), "the old record is a PIN lock");
+        eq(-1, OneOSGuestLock.pinLength(0), "without a length");
+        eq(1, check(PIN), "a wrong PIN adds none");
+        eq(-1, OneOSGuestLock.pinLength(0), "still none");
+        eq(0, check(six), "the PIN matches");
+        eq(6, OneOSGuestLock.pinLength(0), "and the length is kept from then on");
+        yes(text(RECORD).equals(line), "in the same record");
+        restart();
+        eq(6, OneOSGuestLock.pinLength(0), "after a restart too");
+        eq(0, check(six), "and the PIN still matches");
+
+        eq(1, set(4, b("258025"), six), "a password of six digits");
+        eq(-1, OneOSGuestLock.pinLength(0), "a password has no length");
+        eq(1, set(3, six, six), "the PIN again");
+        put(RECORD, text(RECORD).trim().replaceAll(" 6$", " 3") + "\n");
+        restart();
+        eq(3, type(), "a length that cannot be: still a lock");
+        eq(-1, OneOSGuestLock.pinLength(0), "but no length");
     }
 
     static void record() throws Exception {
@@ -798,6 +901,9 @@ class HelperTest(unittest.TestCase):
 
     def test_count_and_wait_survive_a_restart_and_edits(self):
         self.scenario('restarts')
+
+    def test_the_pin_length_of_six_digits_and_more(self):
+        self.scenario('pinlength')
 
     def test_a_damaged_record_is_no_lock(self):
         self.scenario('damaged')
