@@ -13,7 +13,7 @@ SOURCE = (ASSETS / 'guest_props.sh').read_text()
 START = '    RR=persist.sys.renderengine.retry\n'
 END = '    REV=${ONEOS_GUEST_RE_BACKEND-$REV}\n'
 CODE = (START + SOURCE.split(START, 1)[1].split(END, 1)[0]) \
-    .replace('/sys/class/kgsl/kgsl-3d0/gpu_model', '$KGSL').replace('/vendor/lib64/egl/libGLES_mali.so', '$MALI') + 'echo "REV=$REV"\n'
+    .replace('/sys/class/kgsl/kgsl-3d0/gpu_model', '$KGSL').replace('/vendor/lib64/egl/libGLES_mali.so', '$MALI').replace('/vendor/lib64/hw/vulkan.samsung.so', '$VKSO') + 'echo "REV=$REV"\n'
 RR = 'persist.sys.renderengine.retry'
 REAL_GREP = next(p for p in ('/usr/bin/grep', '/bin/grep') if os.path.exists(p))
 # toybox grep on bionic: "\|" in a basic expression is a plain "|", not "or".
@@ -33,11 +33,12 @@ exec {REAL_GREP} "$@"
 A25 = {'ro.board.platform': 'universal8825', 'ro.hardware': 's5e8825', 'ro.soc.manufacturer': 'Samsung'}
 A34 = {'ro.board.platform': 'mt6877', 'ro.hardware': 'mt6877', 'ro.soc.manufacturer': 'Mediatek'}
 S23FE = {'ro.board.platform': 'universal9925', 'ro.hardware': 's5e9925', 'ro.soc.manufacturer': 'Samsung'}
+S24 = {'ro.board.platform': 'erd9945', 'ro.hardware': 's5e9945', 'ro.soc.manufacturer': 'Samsung'}
 S22U = {'ro.board.platform': 'taro', 'ro.hardware': 'qcom', 'ro.soc.manufacturer': 'QTI'}
 
 
 class RenderEngineProps(unittest.TestCase):
-    def run_case(self, phone, image_retry='1', host=None, mali=True, kgsl=False, image='oxygenos16-cph2745', env=None, rp_fails=False):
+    def run_case(self, phone, image_retry='1', host=None, mali=True, kgsl=False, image='oxygenos16-cph2745', env=None, rp_fails=False, vkso=False):
         """host: None when One UI does not hold the retry property, else its value there."""
         with tempfile.TemporaryDirectory() as d:
             root = Path(d); store = root / 'props'; store.mkdir(); stage = root / 'stage'; stage.mkdir(); bin_ = root / 'bin'; bin_.mkdir()
@@ -50,6 +51,7 @@ class RenderEngineProps(unittest.TestCase):
             (stage / '.oneos_stage').write_text('{"image": "%s", "set": "x"}\n' % image)
             if mali: (root / 'mali.so').write_text('')
             if kgsl: (root / 'gpu_model').write_text('Adreno')
+            if vkso: (root / 'vulkan.so').write_text('')
             (bin_ / 'grep').write_text(PHONE_GREP); (bin_ / 'grep').chmod(0o755)
             rp = root / 'rp'
             rp.write_text('#!/bin/sh\n[ "$1" = -n ] || exit 2\n' + ('exit 1\n' if rp_fails else 'printf "%s" "$3" > "$PROPS/$2"\n'))
@@ -57,7 +59,7 @@ class RenderEngineProps(unittest.TestCase):
             prefix = 'getprop() { [ -f "$PROPS/$1" ] && cat "$PROPS/$1"; }\n'
             e = {**os.environ, 'PATH': f'{bin_}:{os.environ["PATH"]}', 'PROPS': str(store), 'RP': str(rp), 'OVR': str(root / 'ovr'),
                  'HOST': str(root / 'host'), 'NEW': str(root / 'new'), 'STAGE': str(stage), 'MALI': str(root / 'mali.so'),
-                 'KGSL': str(root / 'gpu_model'), **(env or {})}
+                 'KGSL': str(root / 'gpu_model'), 'VKSO': str(root / 'vulkan.so'), **(env or {})}
             out = subprocess.run(['sh', '-c', prefix + CODE], env=e, check=True, capture_output=True, text=True).stdout.splitlines()
             new = [l for l in (root / 'new').read_text().splitlines() if l.startswith(RR)]
             ovr = (root / 'ovr').read_text() if (root / 'ovr').exists() else ''
@@ -125,6 +127,24 @@ class RenderEngineProps(unittest.TestCase):
         lines, rev, new, ovr, held = self.run_case(A25, image='coloros17-x9u-in')
         self.assertEqual(('REV=', [f'{RR}=0']), (rev, new))
         self.assertEqual([f'guest_props: {RR}=0 for the session (no Adreno: SkiaGL would wait for kgsl forever)'], lines)
+
+
+    def test_other_systems_on_an_xclipse_exynos_get_vulkan(self):
+        # Galaxy S24, Pixel image: GLES is ANGLE on Vulkan there, blur dropped frames.
+        lines, rev, new, ovr, held = self.run_case(S24, mali=False, vkso=True, image='pixel9proxl-komodo', image_retry=None)
+        self.assertEqual(('REV=skiavkthreaded', []), (rev, new))
+        self.assertEqual(["guest_props: Xclipse Exynos (GLES is ANGLE on Vulkan): the Vulkan RenderEngine instead of the image's"], lines[-1:])
+
+    def test_the_xclipse_choice_has_a_switch_and_needs_samsungs_vulkan(self):
+        for kw in ({'env': {'ONEOS_GUEST_RE_VULKAN': '0'}, 'vkso': True}, {'vkso': False}, {'vkso': True, 'mali': True}, {'vkso': True, 'kgsl': True}):
+            with self.subTest(kw):
+                kw.setdefault('mali', False)
+                lines, rev, new, ovr, held = self.run_case(S24, image='pixel9proxl-komodo', image_retry=None, **kw)
+                self.assertEqual('REV=', rev)
+
+    def test_mediatek_keeps_the_other_images_choice(self):
+        lines, rev, new, ovr, held = self.run_case(A34, mali=False, vkso=True, image='pixel9proxl-komodo', image_retry=None)
+        self.assertEqual('REV=', rev)
 
 
 class PhoneGrep(unittest.TestCase):

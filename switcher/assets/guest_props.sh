@@ -388,6 +388,24 @@ add)
                     esac
                 fi ;;
         esac
+    else
+        # The other images on an Xclipse Exynos (Galaxy S24, 2026-11-12: Pixel frames drop
+        # whenever a blur is on screen). The phone has no OpenGL ES driver, GLES is ANGLE on
+        # Vulkan ("ANGLE ((Samsung Xclipse 940) on Vulkan 1.3.304)" in the guest's dumpsys
+        # SurfaceFlinger, RE "GLES (Ganesh)", blur KawaseDualFilterV2), so every blur pass
+        # of the image's SkiaGL went through the translation. The Vulkan RenderEngine
+        # talks to the driver directly. No Mali library, no kgsl, Samsung's Vulkan HAL:
+        # the Mali Exynos (SkiaVk aborts there, above) never come here.
+        # ONEOS_GUEST_RE_VULKAN=0 keeps the image's choice.
+        case "$(getprop ro.board.platform)/$(getprop ro.hardware)/$(getprop ro.soc.manufacturer)" in
+            *mt[0-9]*|*[Mm]edia[Tt]ek*) ;;
+            *s5e[0-9]*|*erd[0-9]*|*exynos*|*universal[0-9]*|*[Ss]amsung*)
+                if [ "${ONEOS_GUEST_RE_VULKAN:-1}" = 1 ] && [ ! -e /vendor/lib64/egl/libGLES_mali.so ] &&
+                        [ ! -e /sys/class/kgsl/kgsl-3d0/gpu_model ] && [ -e /vendor/lib64/hw/vulkan.samsung.so ]; then
+                    REV=skiavkthreaded
+                    echo "guest_props: Xclipse Exynos (GLES is ANGLE on Vulkan): the Vulkan RenderEngine instead of the image's"
+                fi ;;
+        esac
     fi
     REV=${ONEOS_GUEST_RE_BACKEND-$REV}
     if [ -n "$REV" ]; then
