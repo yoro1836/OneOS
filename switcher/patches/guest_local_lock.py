@@ -525,7 +525,8 @@ def patch_lss(lines, rel, pkg_text):
                       + r"->getCredentialTypeInternal\(I\)I")
     if len(t_code) not in (3, 4) or not call.fullmatch(t_code[-3][1]):
         raise Skip(f"{rel}: getCredentialType has another shape")
-    m = re.fullmatch(r"move-result (v\d+)", t_code[-2][1])
+    # R8 code (Pixel) keeps the result in a parameter register (move-result p0).
+    m = re.fullmatch(r"move-result ([vp]\d+)", t_code[-2][1])
     if not m or t_code[-1][1] != "return " + m.group(1) or t_locals > 8:
         raise Skip(f"{rel}: getCredentialType has another shape")
     if any(".catch" in l or l.strip().startswith(":") for l in lines[t_i:t_end]):
@@ -598,7 +599,13 @@ def main(root, helper):
             raise Skip("LockSettingsStrongAuth is in another dex than LockSettingsService")
         paths = {rel: os.path.join(root, dirs[rel], rel) for rel in dirs}
         text = {rel: read(paths[rel]) for rel in dirs}
-        helper_out = os.path.join(root, dirs[LSS_REL], PKG, HELPER_NAME)
+        # The helper normally goes beside the lock service. A dex with no room left for its
+        # references (Pixel's classes2.dex: R8 code, 12 over the 65536 limit) takes it in
+        # another dex of the same jar instead: ONEOS_GUEST_LOCK_HELPER_DEX=smali_classes4.
+        helper_dir = os.environ.get("ONEOS_GUEST_LOCK_HELPER_DEX") or dirs[LSS_REL]
+        if not os.path.isdir(os.path.join(root, helper_dir)) or not helper_dir.startswith("smali"):
+            fail(f"no smali directory {helper_dir} for the helper")
+        helper_out = os.path.join(root, helper_dir, PKG, HELPER_NAME)
 
         have = [MARK in text[LSS_REL], KEYSTORE_TEXT in text[TMS_REL],
                 any(os.path.isfile(os.path.join(root, d, PKG, HELPER_NAME))
@@ -631,11 +638,12 @@ def main(root, helper):
     for rel, lines in new.items():
         with open(paths[rel], "w") as f:
             f.write("\n".join(lines))
+    os.makedirs(os.path.dirname(helper_out), exist_ok=True)
     shutil.copy(helper, helper_out)
     print("guest_local_lock: LockSettingsService set, verify, credential type and FRP check; "
           "TrustManagerService keystore report; PreAuthInfo device credential; OneOSGuestLock",
           file=sys.stderr)
-    for d in sorted({dirs[LSS_REL], dirs[TMS_REL], dirs[PRE_REL]}):
+    for d in sorted({dirs[LSS_REL], dirs[TMS_REL], dirs[PRE_REL], helper_dir}):
         print(d)
 
 
