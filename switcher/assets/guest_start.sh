@@ -336,6 +336,18 @@ blur_again() {
     [ "$(getprop "$bk")" = 1 ] || setprop "$bk" 1 2>/dev/null
     echo "[Pivoted Root] window blur: $bk was '${bv}' $1, now '$(getprop "$bk")'"
 }
+# The properties resetprop did not add (guest_props.sh, data/oneos_props_want),
+# through init's property service, before the guest's first process reads them.
+if [ -s /data/oneos_props_want ]; then
+    pw_ok=0; pw_no=""
+    while IFS= read -r pwl; do
+        pwk=${pwl%%=*}; pwv=${pwl#*=}
+        [ -n "$pwk" ] || continue
+        [ "$(getprop "$pwk")" = "$pwv" ] || setprop "$pwk" "$pwv" 2>/dev/null
+        if [ "$(getprop "$pwk")" = "$pwv" ]; then pw_ok=$((pw_ok + 1)); else pw_no="$pw_no $pwk"; fi
+    done < /data/oneos_props_want
+    echo "[Pivoted Root] guest properties resetprop left out: $pw_ok set through setprop; not set:${pw_no:- none}"
+fi
 blur_again "before SurfaceFlinger"
 echo "[Pivoted Root] Starting guest SurfaceFlinger..."
 # sf.log used to grow without bound: the guest's RenderEngine dumps LLVM IR for

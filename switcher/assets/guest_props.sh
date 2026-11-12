@@ -1237,19 +1237,28 @@ add)
             "$RP" -n "${line%%=*}" "${line#*=}" 2>/dev/null && echo "${line%%=*}" >> "$ADDED"
         done < "$NEW"
     fi
-    # The batch can report success and leave props out: on the S24 (KernelSU,
-    # 8fa025f6) ro.oneos.udfps_location and ro.oneos.panel_scale_milli were in
-    # the list and empty in the guest. Each one is read back, and set by itself
-    # when it is not there.
-    fixed=0; lost=0
+    # The batch can report success and leave props out. On the S24 (KernelSU,
+    # Android 17) resetprop did not add one new property, in the batch or one
+    # at a time (e7653e4d: 121 of 138 not there, among them
+    # persist.dbg.volte_avail_ovr, ro.oneos.udfps_location and the blur one;
+    # what the guest had of them was left from an earlier boot, and VoLTE went
+    # with the next restart of the phone). Each one is read back; what is
+    # missing is set by itself, and what still is goes to
+    # data/oneos_props_want: guest_start.sh sets those through init's property
+    # service before the guest's first process, the way that brought the blur
+    # property back. Not from here: a persist. property set now would land in
+    # One UI's own store, which is put aside only after this.
+    fixed=0; left=0
+    rm -f "$STAGE/data/oneos_props_want"
     while IFS= read -r line; do
         k=${line%%=*}; v=${line#*=}
         [ -n "$k" ] && [ -n "$v" ] || continue
         [ "$(getprop "$k")" = "$v" ] && continue
         "$RP" -n "$k" "$v" 2>/dev/null
-        if [ "$(getprop "$k")" = "$v" ]; then fixed=$((fixed + 1)); else lost=$((lost + 1)); lostk="$lostk $k"; fi
+        if [ "$(getprop "$k")" = "$v" ]; then fixed=$((fixed + 1)); continue; fi
+        echo "$line" >> "$STAGE/data/oneos_props_want" 2>/dev/null; left=$((left + 1))
     done < "$NEW"
-    [ $((fixed + lost)) = 0 ] || echo "guest_props: $fixed props were missing after the batch and set one by one; $lost could not be set:${lostk:- none}"
+    [ $((fixed + left)) = 0 ] || echo "guest_props: after the batch $fixed props were set one by one; $left are still missing and left to the guest's start (data/oneos_props_want)"
     echo "guest_props add: batch done $(date +%T)"
     echo "guest_props: added $(wc -l < "$ADDED") props from the guest's build.prop files"
     rm -f "$HOST" "$NEW"
