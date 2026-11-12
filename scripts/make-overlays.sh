@@ -299,6 +299,11 @@ if NEW=$(python3 -I "$ROOT/switcher/patches/guest_fingerprint_readonly.py" "$WOR
     KEY_DIRS="$KEY_DIRS $NEW"
     FPRO=1
 fi
+# Where the under-display sensor is, when the HAL does not say (Samsung's):
+# patches/guest_fingerprint_location.py. Without it only the icon is missing.
+if NEW=$(python3 -I "$ROOT/switcher/patches/guest_fingerprint_location.py" "$WORK/services"); then
+    KEY_DIRS="$KEY_DIRS $NEW"
+fi
 # The guest's own idmap2d instead of One UI's (patches/guest_own_idmap.py).
 KEY_DIRS="$KEY_DIRS $(python3 -I "$ROOT/switcher/patches/guest_own_idmap.py" "$WORK/services")"
 # A WebView zygote that cannot start is logged, not fatal (S24 Ultra, Find X9

@@ -138,5 +138,77 @@ class Prepare(unittest.TestCase):
             self.assertIn('Guest fingerprint: off', r.stdout)
 
 
+LOCATION = ROOT / 'switcher/patches/guest_fingerprint_location.py'
+PROVIDER = f'''.class public L{PKG}/FingerprintProvider;
+.super Ljava/lang/Object;
+
+.method public final getWorkaroundSensorProps(Landroid/content/Context;)Ljava/util/List;
+    .locals 5
+
+    new-instance v0, Ljava/util/ArrayList;
+
+    invoke-direct {{v0}}, Ljava/util/ArrayList;-><init>()V
+
+    :cond_32
+    return-object v0
+.end method
+
+.method public final parseSensorLocation()V
+    .locals 7
+
+    invoke-direct {{v1, v3, v4, v5, p1}}, Landroid/hardware/biometrics/SensorLocationInternal;-><init>(Ljava/lang/String;III)V
+
+    return-void
+.end method
+'''
+
+
+class Location(unittest.TestCase):
+    def test_patcher(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp) / 'smali' / PKG
+            d.mkdir(parents=True)
+            (d / 'FingerprintProvider.smali').write_text(PROVIDER)
+            cmd = [sys.executable, '-I', str(LOCATION), tmp]
+            r = subprocess.run(cmd, capture_output=True, text=True)
+            self.assertEqual((r.returncode, r.stdout.strip()), (0, 'smali'), r.stderr)
+            text = (d / 'FingerprintProvider.smali').read_text()
+            method = text.split('.end method')[0]
+            self.assertIn('.locals 7', method)
+            self.assertIn('"ro.oneos.udfps_location"', method)
+            self.assertLess(method.index(':oneos_loc_done'), method.index('return-object v0'))
+            self.assertEqual(text.count('return-object v0'), 1)
+            self.assertNotEqual(subprocess.run(cmd, capture_output=True).returncode, 0)
+
+    def props(self, position, device='e1s', env=None):
+        src = (ROOT / 'switcher/assets/guest_props.sh').read_text()
+        a = src.index('    FPP=${ONEOS_FP_POSITION_FILE')
+        code = src[a:src.index("    # ColorOS's animation level", a)]
+        with tempfile.TemporaryDirectory() as tmp:
+            t = Path(tmp)
+            (t / 'display_modes_host.log').write_text(
+                '    activeMode={id=0, hwcId=4, resolution=1080x2340, vsyncRate=120.00 Hz, dpi=415.64x418.56, group=0, vrrConfig=N/A}\n')
+            if position is not None:
+                (t / 'pos').write_text(position + '\n')
+            (t / 'new').write_text('')
+            e = {'STAGE': tmp, 'NEW': str(t / 'new'), 'ONEOS_FP_POSITION_FILE': str(t / 'pos'), 'PATH': '/usr/bin:/bin', **(env or {})}
+            subprocess.run(['sh', '-c', f'getprop() {{ echo {device}; }}\n' + code], env=e, check=True, capture_output=True)
+            return (t / 'new').read_text()
+
+    def test_s24_position_in_pixels(self):
+        self.assertEqual(self.props('30.87,0.00,7.50,8.25,14.80,14.80,13.00,13.00,5.00'), 'ro.oneos.udfps_location=540,1763,106\n')
+
+    def test_left_out(self):
+        self.assertEqual(self.props(None), '')
+        self.assertEqual(self.props('garbage'), '')
+        self.assertEqual(self.props('300.0,0.00,7.50,8.25,14.80,14.80,13.00,13.00,5.00'), '')
+        self.assertEqual(self.props('30.87,0.00,7.50,8.25,14.80,14.80,13.00,13.00,5.00', device='pa3q'), '')
+        self.assertEqual(self.props('30.87,0.00,7.50,8.25,14.80,14.80,13.00,13.00,5.00', env={'ONEOS_GUEST_FINGERPRINT': '0'}), '')
+        self.assertEqual(self.props('30.87,0.00,7.50,8.25,14.80,14.80,13.00,13.00,5.00', env={'ONEOS_GUEST_UDFPS_LOCATION': ''}), '')
+
+    def test_set_by_hand(self):
+        self.assertEqual(self.props(None, device='pa3q', env={'ONEOS_GUEST_UDFPS_LOCATION': '720,2500,130'}), 'ro.oneos.udfps_location=720,2500,130\n')
+
+
 if __name__ == '__main__':
     unittest.main()

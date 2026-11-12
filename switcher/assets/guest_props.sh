@@ -221,6 +221,31 @@ add)
             echo "$BLUR=1" >> "$NEW"
         fi
     fi
+    # The fingerprint sensor's place on the panel, for the guest's lock screen
+    # (patches/guest_fingerprint_location.py). Samsung's HAL gives the type
+    # (under display) and no place: the S24's Pixel guest had no fingerprint
+    # icon and a lock screen laid out around the top left corner (074cef7e).
+    # Samsung's sensor node has it in millimetres: the sensor's lower edge
+    # above the panel's, its offset from the middle, its width and height,
+    # two for the touch area, the icon's size (S24: 30.87,0.00,7.50,8.25,
+    # 14.80,14.80,13.00,...). In pixels of the panel One UI's SurfaceFlinger
+    # listed. S24 only, where it was read; ONEOS_GUEST_UDFPS_LOCATION=x,y,radius
+    # sets it anywhere, an empty one leaves it out.
+    FPP=${ONEOS_FP_POSITION_FILE:-/sys/class/fingerprint/fingerprint/position}
+    FPL=""
+    case "$(getprop ro.product.vendor.device) $(getprop ro.product.device)" in
+        e1s*|*" e1s")
+            FPM=$(grep -F 'activeMode={id=' "$STAGE/display_modes_host.log" 2>/dev/null | head -n 1 |
+                sed -n 's/.*resolution=\([0-9]*\)x\([0-9]*\),.*dpi=\([0-9.]*\)x\([0-9.]*\),.*/\1 \2 \3 \4/p')
+            [ -r "$FPP" ] && [ -n "$FPM" ] && FPL=$(echo "$(cat "$FPP") $FPM" | tr ',' ' ' | awk 'NF == 13 && $12 > 0 && $13 > 0 {
+                x = $10 / 2 + $2 * $12 / 25.4; y = $11 - ($1 + $4 / 2) * $13 / 25.4; r = $7 / 2 * $12 / 25.4
+                if (x > r && x < $10 - r && y > r && y < $11 - r && r >= 20) printf "%d,%d,%d", x + 0.5, y + 0.5, r + 0.5 }') ;;
+    esac
+    FPL=${ONEOS_GUEST_UDFPS_LOCATION-$FPL}
+    if [ -n "$FPL" ] && [ "${ONEOS_GUEST_FINGERPRINT:-1}" = 1 ] && ! grep -q '^ro.oneos.udfps_location=' "$NEW"; then
+        echo "ro.oneos.udfps_location=$FPL" >> "$NEW"
+        echo "guest_props: fingerprint sensor at $FPL (x,y,radius in panel pixels)"
+    fi
     # ColorOS's animation level. OPPO's launcher turns its material blur on
     # only when persist.sys.oplus.anim_level is a valid level
     # (PlatformLevelUtils ii.l.h(): 1-4): the app drawer needs level 1
