@@ -352,6 +352,10 @@ KEY_DIRS="$KEY_DIRS $(python3 -I "$ROOT/switcher/patches/oplus_soundtrigger_no_h
 # rebooted: the reboot took One UI's audio HAL process and the guest's audio down, again
 # and again (patches/guest_soundtrigger_no_reboot.py, 0.4.64).
 KEY_DIRS="$KEY_DIRS $(python3 -I "$ROOT/switcher/patches/guest_soundtrigger_no_reboot.py" "$WORK/services")"
+# The restart action itself only logs (patches/guest_soundtrigger_no_hal_restart.py):
+# on a HIDL sound-trigger HAL (Galaxy S24, Exynos) the refusal is a HalException,
+# which the patch above does not cover.
+KEY_DIRS="$KEY_DIRS $(python3 -I "$ROOT/switcher/patches/guest_soundtrigger_no_hal_restart.py" "$WORK/services")"
 # Pixel's Comfort View as a color matrix, like Night Light (run 43: the switch
 # did nothing; patches/comfort_view_bridge.py). Left out, with a warning, on an
 # image without ColorDisplayService.setUp, and not run for ColorOS: its
