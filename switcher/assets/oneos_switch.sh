@@ -3104,6 +3104,36 @@ while true; do
                     gxo disable --user 0 com.android.shell:OneOSAutoBrightness
                 fi
             fi
+            # The fingerprint icon's size (S24 fork, 2026-11-12): SystemUI divides 6 mm
+            # by dimen/pixel_pitch, -1 in the image (its phone's vendor overlay sets
+            # it), so the icon over the sensor was a huge piece of itself. The
+            # panel's own pitch (guest_props.sh, /data/oneos_pixel_pitch) as a
+            # fabricated overlay, a plain float, which cmd overlay fabricate cannot
+            # make (OneOSOverlayDimen); SystemUI reads it once at its start, so the
+            # first time it changes SystemUI is restarted.
+            if [ $GUEST_AOSP_SYSUI = 1 ]; then
+                if [ -s \"$STAGE/data/oneos_pixel_pitch\" ]; then
+                    read PPH PPV < \"$STAGE/data/oneos_pixel_pitch\"
+                    ppl() { timeout 20 $BB nsenter -t \$PID -m /system/bin/sh /data/oneos_genv.sh /system/bin/cmd overlay lookup com.android.systemui com.android.systemui:dimen/pixel_pitch 2>/dev/null | tr -d '\r' | head -n 1; }
+                    PPW=\$(ppl)
+                    PPR=\$(gdim OneOSPixelPitch com.android.systemui com.android.systemui:dimen/pixel_pitch=float:\$PPV)
+                    case \"\$PPR\" in registered*) gxo enable --user 0 com.android.shell:OneOSPixelPitch ;; esac
+                    PPN=\$(ppl)
+                    echo \"[UI Activator] Fingerprint icon: dimen/pixel_pitch was '\$PPW', now '\$PPN' (wanted \$PPV; \$PPR)\"
+                    PPA=\$(cat \"$STAGE/data/oneos_pixel_pitch.applied\" 2>/dev/null)
+                    case \"\$PPR\" in registered*) ;; *) PPA=\$PPV ;; esac
+                    if [ \"\$PPA\" != \"\$PPV\" ]; then
+                        echo \"\$PPV\" > \"$STAGE/data/oneos_pixel_pitch.applied\"
+                        for sp in \$(pidof com.android.systemui 2>/dev/null); do
+                            [ \"\$(readlink /proc/\$sp/ns/mnt 2>/dev/null)\" = \"\$(readlink /proc/\$PID/ns/mnt 2>/dev/null)\" ] || continue
+                            kill \$sp 2>/dev/null && echo \"[UI Activator] Fingerprint icon: the guest's SystemUI (\$sp) restarted to read it\"
+                        done
+                    fi
+                else
+                    rm -f \"$STAGE/data/oneos_pixel_pitch.applied\"
+                    gxo disable --user 0 com.android.shell:OneOSPixelPitch
+                fi
+            fi
             # Fold test (fold layout only). On every lid switch event record what
             # the guest did: device state, layout, both touch mappers and
             # backlights, a screenshot of display 0, and after folding 10 s of

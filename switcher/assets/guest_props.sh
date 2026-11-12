@@ -242,6 +242,15 @@ add)
                 if (x > r && x < $10 - r && y > r && y < $11 - r && r >= 20) printf "%d,%d,%d", x + 0.5, y + 0.5, r + 0.5 }') ;;
     esac
     FPL=${ONEOS_GUEST_UDFPS_LOCATION-$FPL}
+    # SystemUI's size for the fingerprint icon is 6 mm over dimen/pixel_pitch
+    # (micrometres a pixel), which each phone's vendor overlay sets and the
+    # image leaves at -1: an icon of -6000 pixels, drawn as a huge piece of
+    # itself over the sensor's circle (S24, 8fa025f6). data/oneos_pixel_pitch:
+    # the panel's own, as a float's bits and in plain, for the overlay
+    # oneos_switch.sh makes.
+    rm -f "$STAGE/data/oneos_pixel_pitch"
+    [ -n "$FPL" ] && [ -n "$FPM" ] && echo "$FPM" | awk '$3 > 0 { p = 25400 / $3; e = int(log(p) / log(2)); if (2 ^ e > p) e--
+        printf "0x%08x %.2f\n", (e + 127) * 8388608 + int((p / 2 ^ e - 1) * 8388608 + 0.5), p }' > "$STAGE/data/oneos_pixel_pitch" 2>/dev/null
     # data/oneos_udfps_want: guest_start.sh sets it again if the guest does not
     # see it (the S24's lock screen still had no sensor place with it in the
     # added list, eb5c9604; the blur property had gone the same way).

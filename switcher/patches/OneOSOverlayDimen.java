@@ -22,6 +22,7 @@ import java.lang.reflect.Method;
  * Runs inside the guest, as root, with the guest's own framework:
  *   CLASSPATH=/data/oneos_overlay_dimen.dex app_process /system/bin OneOSOverlayDimen \
  *       <overlay name> <target package> <package:dimen/name>=<px> ...
+ *   (<package:dimen/name>=float:<value> makes a plain float instead of a dimension)
  *   ... OneOSOverlayDimen --unregister <overlay name>
  * Prints "registered <identifier>" (or "unregistered ..."), or the error and exits 1.
  */
@@ -44,8 +45,15 @@ public class OneOSOverlayDimen {
       for (int i = 2; i < args.length; i++) {
         int eq = args[i].lastIndexOf('=');
         if (eq <= 0) throw new IllegalArgumentException("not <res>=<px>: " + args[i]);
-        fo.setResourceValue(args[i].substring(0, eq), Float.parseFloat(args[i].substring(eq + 1)),
-            TypedValue.COMPLEX_UNIT_PX, null);
+        String v = args[i].substring(eq + 1);
+        if (v.startsWith("float:")) {
+          // A plain float (type 4), what Resources.getFloat reads: SystemUI's dimen/pixel_pitch.
+          FabricatedOverlay.class.getMethod("setResourceValue", String.class, float.class, String.class)
+              .invoke(fo, args[i].substring(0, eq), Float.parseFloat(v.substring(6)), null);
+          continue;
+        }
+        FabricatedOverlay.class.getMethod("setResourceValue", String.class, float.class, int.class, String.class)
+            .invoke(fo, args[i].substring(0, eq), Float.parseFloat(v), TypedValue.COMPLEX_UNIT_PX, null);
       }
       b.getMethod("registerFabricatedOverlay", FabricatedOverlay.class).invoke(builder, fo);
       commit((OverlayManagerTransaction) b.getMethod("build").invoke(builder));
