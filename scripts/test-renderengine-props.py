@@ -131,12 +131,13 @@ class RenderEngineProps(unittest.TestCase):
 
     def test_other_systems_on_an_xclipse_exynos_get_vulkan(self):
         # Galaxy S24, Pixel image: GLES is ANGLE on Vulkan there, blur dropped frames.
-        lines, rev, new, ovr, held = self.run_case(S24, mali=False, vkso=True, image='pixel9proxl-komodo', image_retry=None)
+        lines, rev, new, ovr, held = self.run_case(S24, mali=False, vkso=True, image='pixel9proxl-komodo', image_retry=None, env={'ONEOS_GUEST_RE_VULKAN': '1'})
         self.assertEqual(('REV=skiavkthreaded', []), (rev, new))
         self.assertEqual(["guest_props: Xclipse Exynos (GLES is ANGLE on Vulkan): the Vulkan RenderEngine instead of the image's"], lines[-1:])
 
     def test_the_xclipse_choice_has_a_switch_and_needs_samsungs_vulkan(self):
-        for kw in ({'env': {'ONEOS_GUEST_RE_VULKAN': '0'}, 'vkso': True}, {'vkso': False}, {'vkso': True, 'mali': True}, {'vkso': True, 'kgsl': True}):
+        V = {'ONEOS_GUEST_RE_VULKAN': '1'}
+        for kw in ({'vkso': True}, {'env': V, 'vkso': False}, {'env': V, 'vkso': True, 'mali': True}, {'env': V, 'vkso': True, 'kgsl': True}):
             with self.subTest(kw):
                 kw.setdefault('mali', False)
                 lines, rev, new, ovr, held = self.run_case(S24, image='pixel9proxl-komodo', image_retry=None, **kw)

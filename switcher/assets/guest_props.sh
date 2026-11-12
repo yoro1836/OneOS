@@ -396,11 +396,13 @@ add)
         # of the image's SkiaGL went through the translation. The Vulkan RenderEngine
         # talks to the driver directly. No Mali library, no kgsl, Samsung's Vulkan HAL:
         # the Mali Exynos (SkiaVk aborts there, above) never come here.
-        # ONEOS_GUEST_RE_VULKAN=0 keeps the image's choice.
+        # Off again (same day): on the S24 the Vulkan RenderEngine drew no blur at all
+        # (Pixel, rootreturn-1 build), and the blur is to stay. ONEOS_GUEST_RE_VULKAN=1
+        # asks for it; the default is the image's choice until the blur draws there.
         case "$(getprop ro.board.platform)/$(getprop ro.hardware)/$(getprop ro.soc.manufacturer)" in
             *mt[0-9]*|*[Mm]edia[Tt]ek*) ;;
             *s5e[0-9]*|*erd[0-9]*|*exynos*|*universal[0-9]*|*[Ss]amsung*)
-                if [ "${ONEOS_GUEST_RE_VULKAN:-1}" = 1 ] && [ ! -e /vendor/lib64/egl/libGLES_mali.so ] &&
+                if [ "${ONEOS_GUEST_RE_VULKAN:-0}" = 1 ] && [ ! -e /vendor/lib64/egl/libGLES_mali.so ] &&
                         [ ! -e /sys/class/kgsl/kgsl-3d0/gpu_model ] && [ -e /vendor/lib64/hw/vulkan.samsung.so ]; then
                     REV=skiavkthreaded
                     echo "guest_props: Xclipse Exynos (GLES is ANGLE on Vulkan): the Vulkan RenderEngine instead of the image's"
