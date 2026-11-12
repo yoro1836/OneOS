@@ -1504,8 +1504,10 @@ fi
 # the guest does not have. So the config brings a lux curve of its own, in
 # nits and through the same table, as floats of this panel:
 # 4 nits in the dark, 60 at 100 lux, 210 at 1200 (a lit room), 520 at 10000
-# and up to 1000 in direct sun (the wide curve's slope, the panel's high
-# brightness range, as One UI uses it outdoors). The light sensor is the
+# and up to 1400 in direct sun (the wide curve's slope, the panel's high
+# brightness range; 1400 is what One UI's automatic brightness reaches on the
+# Galaxy S24 with most of the screen white, GSMArena: 446 by hand, 785 with
+# Extra brightness, 1401 automatic; 1000 was too dim for the owner). The light sensor is the
 # phone's default one (no <lightSensor>). patches/guest_auto_brightness.py
 # makes a config with such a curve count without the resource, and the UI
 # activator shows the switch in Settings (oneos_switch.sh, /data/oneos_auto_brightness).
@@ -1536,7 +1538,7 @@ DDCEOF
         # The table again as float per nits; above its last point the slope to the peak.
         for (i = 1; i <= n; i++) { split(pt[i], v, ":"); tf[i] = v[1] * k; tn[i] = v[2] + 0 }
         peak = 2600.0 / k
-        c = split("0:4 1:6 2:8 4:11 8:15 15:21 30:30 60:45 100:60 200:85 400:120 700:160 1200:210 2000:270 4000:350 7000:430 10000:520 20000:650 35000:820 50000:1000", lx, " ")
+        c = split("0:4 1:6 2:8 4:11 8:15 15:21 30:30 60:45 100:60 200:85 400:120 700:160 1200:210 2000:270 4000:350 7000:430 10000:520 20000:750 35000:1050 50000:1250 80000:1400", lx, " ")
         last = -1
         for (j = 1; j <= c; j++) {
             split(lx[j], v, ":"); want = v[2] + 0
@@ -1544,8 +1546,9 @@ DDCEOF
             else if (want >= tn[n]) f = tf[n] + (1.0 - tf[n]) * (want - tn[n]) / (peak - tn[n])
             else for (i = 2; i <= n; i++) if (want <= tn[i]) { f = tf[i-1] + (tf[i] - tf[i-1]) * (want - tn[i-1]) / (tn[i] - tn[i-1]); break }
             if (wide != "wide" && f > tf[n]) f = tf[n]
+            # No further than the panel goes, and no step that adds nothing.
             if (f > 0.999) f = 0.999
-            if (f < last) f = last
+            if (f <= last) break
             last = f
             printf "                <point><first>%s</first><second>%.6g</second></point>\n", v[1], f
         }
