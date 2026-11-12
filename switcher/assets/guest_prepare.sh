@@ -2528,6 +2528,12 @@ fi
 # a checked copy the guest starts without it.
 STAGE="$STAGE" BB="$BB" /system/bin/sh "$STAGE/guest_google.sh" prepare ||
     echo "!!! guest_google.sh prepare failed; the guest starts without One UI's Play services"
+# The image's own Play services (GMS_WANT, top): an update the guest's Play
+# Store installed is taken out, so the presented copy runs (guest_google.sh).
+if [ "$GMS_WANT" = 1 ]; then
+    STAGE="$STAGE" BB="$BB" /system/bin/sh "$STAGE/guest_google.sh" drop-installed ||
+        echo "!!! guest_google.sh drop-installed failed; the guest's installed Play services stays"
+fi
 # Galaxy Z Fold8 with the Find N6 set (n6-f8): its SystemUI and guest fixes
 # (switcher/assets/fold8_coloros.sh). Does nothing for any other profile or set.
 # After the system_ext overlay above: a bind made under system_ext before it is

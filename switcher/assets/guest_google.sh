@@ -226,5 +226,17 @@ prepare)
     remove_installed com.google.android.gms
     : > "$CACHE/active"
     ;;
-*) echo "guest_google.sh: expected snapshot or prepare" >&2; exit 3 ;;
+drop-installed)
+    # Sets that present the image's own Play services (Pixel, GMS_WANT in
+    # guest_prepare.sh). Galaxy S24, Pixel 9 Pro XL, 2026-11-12: Google's
+    # sign-in screen closed the moment it opened, and the stage held a copy of
+    # Play services the guest's Play Store had installed
+    # (data/app/~~.../com.google.android.gms-...). The same as ColorOS above:
+    # the installed copy goes (its APK folder, never its data), the copy
+    # presented from the image's payload runs with its privileged permissions.
+    # ONEOS_GUEST_GMS_KEEP_UPDATE=1 leaves it.
+    [ "${ONEOS_GUEST_GMS_KEEP_UPDATE:-0}" != 1 ] || exit 0
+    remove_installed com.google.android.gms
+    ;;
+*) echo "guest_google.sh: expected snapshot, prepare or drop-installed" >&2; exit 3 ;;
 esac
