@@ -320,6 +320,23 @@ CD=/data/oneos_composer_before_sf.log
 # each session: a stutter the first time each blur, animation or window shape
 # is drawn. This is the guest's own /data (the stage).
 mkdir -p /data/misc/surfaceflinger && chown 1000:1000 /data/misc/surfaceflinger && chmod 0700 /data/misc/surfaceflinger
+# Window blur for SurfaceFlinger itself: it reads the property once, at its
+# start. With guest root on the property was missing at the framework's start
+# (set again there, below), so SurfaceFlinger had started without blur and the
+# shade stayed see-through and sharp while WindowManager said mBlurEnabled=true
+# (S24, eb5c9604).
+blur_again() {
+    [ -f /data/oneos_blur_want ] || return 0
+    bk=ro.surface_flinger.supports_background_blur
+    bv=$(getprop "$bk")
+    [ "$bv" != 1 ] || { echo "[Pivoted Root] window blur: $bk=1 ($1)"; return 0; }
+    for brp in /data/adb/ksu/bin/resetprop /data/adb/ap/bin/resetprop /debug_ramdisk/resetprop /sbin/resetprop; do
+        [ -x "$brp" ] && "$brp" -n "$bk" 1 2>/dev/null && break
+    done
+    [ "$(getprop "$bk")" = 1 ] || setprop "$bk" 1 2>/dev/null
+    echo "[Pivoted Root] window blur: $bk was '${bv}' $1, now '$(getprop "$bk")'"
+}
+blur_again "before SurfaceFlinger"
 echo "[Pivoted Root] Starting guest SurfaceFlinger..."
 # sf.log used to grow without bound: the guest's RenderEngine dumps LLVM IR for
 # every shader it compiles ("Global Value @fullLiteral...") and got to 300+ MB in
@@ -2537,17 +2554,6 @@ echo "[Pivoted Root] Launching guest Zygote & SystemServer via zygote_exec..."
 # from getprop and WindowManager had mBlurEnabled=false all session; with
 # guest root off (70691750) it was there. Whatever took it out ran before
 # here: set again after the root runtime's pre stage, and said.
-blur_again() {
-    [ -f /data/oneos_blur_want ] || return 0
-    bk=ro.surface_flinger.supports_background_blur
-    bv=$(getprop "$bk")
-    [ "$bv" != 1 ] || { echo "[Pivoted Root] window blur: $bk=1 ($1)"; return 0; }
-    for brp in /data/adb/ksu/bin/resetprop /data/adb/ap/bin/resetprop /debug_ramdisk/resetprop /sbin/resetprop; do
-        [ -x "$brp" ] && "$brp" -n "$bk" 1 2>/dev/null && break
-    done
-    [ "$(getprop "$bk")" = 1 ] || setprop "$bk" 1 2>/dev/null
-    echo "[Pivoted Root] window blur: $bk was '${bv}' $1, now '$(getprop "$bk")'"
-}
 # The fingerprint sensor's place (guest_props.sh), the same way.
 udfps_again() {
     [ -s /data/oneos_udfps_want ] || return 0
