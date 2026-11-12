@@ -2530,8 +2530,28 @@ else
     rm -f /data/oneos_bring_restore.sh
 fi
 echo "[Pivoted Root] Launching guest Zygote & SystemServer via zygote_exec..."
+# Window blur, once more before the framework reads it. guest_props.sh sets
+# ro.surface_flinger.supports_background_blur for the session, and the guest's
+# SurfaceFlinger saw it (blur algorithm KawaseDualFilterV2), but in the two
+# S24 sessions with guest root on (237264f5, 205c1903) the property was gone
+# from getprop and WindowManager had mBlurEnabled=false all session; with
+# guest root off (70691750) it was there. Whatever took it out ran before
+# here: set again after the root runtime's pre stage, and said.
+blur_again() {
+    [ -f /data/oneos_blur_want ] || return 0
+    bk=ro.surface_flinger.supports_background_blur
+    bv=$(getprop "$bk")
+    [ "$bv" != 1 ] || { echo "[Pivoted Root] window blur: $bk=1 ($1)"; return 0; }
+    for brp in /data/adb/ksu/bin/resetprop /data/adb/ap/bin/resetprop /debug_ramdisk/resetprop /sbin/resetprop; do
+        [ -x "$brp" ] && "$brp" -n "$bk" 1 2>/dev/null && break
+    done
+    [ "$(getprop "$bk")" = 1 ] || setprop "$bk" 1 2>/dev/null
+    echo "[Pivoted Root] window blur: $bk was '${bv}' $1, now '$(getprop "$bk")'"
+}
+blur_again "before the root runtime"
 if [ -f /data/oneos_root/enabled ]; then
     /system/bin/sh /data/oneos_runtime.sh pre || exit 3
+    blur_again "after the root runtime's pre stage"
     /system/bin/sh /data/oneos_runtime.sh late > /data/adb/oneos/run/late.log 2>&1 &
     exec /data/adb/oneos/bin/su --launch
 fi

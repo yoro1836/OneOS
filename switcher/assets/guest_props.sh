@@ -205,7 +205,11 @@ add)
     # guest framework reads it with getBoolean(..., true) and WindowManager
     # still said false, so One UI most likely defines it as 0: override it for
     # the session. ONEOS_GUEST_BLUR=0 leaves it alone.
+    # data/oneos_blur_want: guest_start.sh checks the property again before the
+    # framework starts (it was gone there with guest root on, S24 205c1903).
+    rm -f "$STAGE/data/oneos_blur_want"
     if [ "${ONEOS_GUEST_BLUR:-1}" = 1 ]; then
+        : > "$STAGE/data/oneos_blur_want" 2>/dev/null
         BLUR=ro.surface_flinger.supports_background_blur
         if grep -qxF "$BLUR" "$HOST"; then
             hv=$(getprop "$BLUR")

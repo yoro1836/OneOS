@@ -208,7 +208,17 @@ if [ -n "$BB" ] && [ -n "$gp" ] && [ ! -L "$DR" ] && rm -rf "$DR" 2>/dev/null &&
       done
       echo "audio HAL pid: $(timeout 3 dumpsys --pid android.hardware.audio.core.IModule/default 2>/dev/null | head -n 1)"
     } > "$DR/bt_props.txt" 2>&1
-    wait $p1 $p2 $p3 $p4 $p5 $p6 $p7 2>/dev/null
+    # Google sign-in (S24, Pixel: the sign-in screen closes at once, and the
+    # diag_90 crash buffer is from before anyone tried): the crash buffer and
+    # the sign-in lines of the log at the end of the session.
+    { echo '== crash buffer (last 400 lines)'; timeout 8 logcat -d -b crash -t 400 2>/dev/null
+      echo '== sign-in and activity lines'
+      timeout 12 logcat -d -b main,system -t 80000 2>/dev/null |
+          "$BB" grep -a -E 'AndroidRuntime|FATAL EXCEPTION|MinuteMaid|AddAccount|GLSUser|GoogleLogin|AccountManagerService|com\.google\.android\.gms/\.auth|com\.google\.android\.gms\.auth|Force finishing|has died|ActivityTaskManager: START.*google' |
+          tail -n 500
+    } > "$DR/signin.txt" 2>&1 &
+    p8=$!
+    wait $p1 $p2 $p3 $p4 $p5 $p6 $p7 $p8 2>/dev/null
     echo "$(date +%T) Guest Bluetooth, audio and location at the return (pid $gp's namespace): $(ls "$DR" 2>/dev/null | tr '\n' ' ')in $DR"
 else
     why="no guest surfaceflinger or system_server"
