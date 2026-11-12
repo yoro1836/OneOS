@@ -1513,6 +1513,18 @@ fi
 # activator shows the switch in Settings (oneos_switch.sh, /data/oneos_auto_brightness).
 # Not for Xiaomi's and vivo's frameworks, which have brightness code of their
 # own. ONEOS_GUEST_AUTO_BRIGHTNESS=0 leaves it out.
+# The Galaxy S24's own tables ($4 = e1s; from the owner's phone, 2026-11-12,
+# /product/overlay/framework-res__e1sksx__auto_generated_rro_product.apk):
+# config_screenBrightnessBacklight / config_screenBrightnessNits (1252 steps,
+# backlight 0..1275: 255 = 500 nits, the top of the slider in One UI, then a
+# straight line to 2450 nits at 1250; here 46 of them, within 1.5 % of the
+# rest) and config_autoBrightnessLevels / config_autoBrightnessDisplayValuesNits
+# as they are (11 nits in the dark, 99 at 100 lux, 200 at 1000, 1000 at 5000,
+# 2450 from 12000). The float is the backlight over 1275: the kernel's
+# /sys/class/backlight/panel has max 12750, and this phone's One UI gave no
+# brightnessMaximum (display_modes_host.log), so up to now it took the Fold's
+# floats, about 20 % too dim a slider. Other phones keep the Fold's table by
+# their scale until their own overlay is here.
 ddc_xml() {
     cat <<'DDCEOF'
 <?xml version="1.0" encoding="utf-8"?>
@@ -1520,10 +1532,18 @@ ddc_xml() {
 <displayConfiguration>
     <screenBrightnessMap>
 DDCEOF
-    awk -v wide="$1" -v m="${2:-}" -v auto="${3:-}" 'BEGIN {
+    awk -v wide="$1" -v m="${2:-}" -v auto="${3:-}" -v panel="${4:-}" 'BEGIN {
         ref = 5.2980394; k = 1
         if (m + 0 >= 1.5 && m + 0 <= 8) k = ref / m
+        peak = 2600.0 / k
+        lux = "0:4 1:6 2:8 4:11 8:15 15:21 30:30 60:45 100:60 200:85 400:120 700:160 1200:210 2000:270 4000:350 7000:430 10000:520 20000:750 35000:1050 50000:1250 80000:1400"
         n = split("0.0026:2.21 0.00333:3.0 0.005015:5.0 0.00694:7.5 0.008891:10.4 0.012079:15.0 0.015279:20.0 0.021151:30.0 0.026566:40.0 0.03701:60.0 0.045723:80.0 0.054391:100.0 0.068653:135.0 0.082069:170.0 0.093062:200.0 0.110574:250.0 0.127287:300.0 0.158918:400.0 0.188764:500.0 0.196299:520.0", pt, " ")
+        if (panel == "e1s") {
+            k = 1; peak = 2450.0
+            n = split("1:1.371 2:1.914 3:2.548 4:3.25 6:4.812 8:6.541 11:9.383 15:13.546 20:19.236 26:26.649 33:35.968 41:47.368 50:60 60:77.067 72:97.412 85:120.631 100:148.774 116:180.223 133:215.094 151:253.504 170:295.566 190:341.391 211:391.091 233:444.773 255:500 300:588.235 350:686.275 400:784.314 450:882.353 500:980.392 550:1078.431 600:1176.471 650:1274.51 700:1372.549 750:1470.588 800:1568.627 850:1666.667 900:1764.706 950:1862.745 1000:1960.784 1050:2058.824 1100:2156.863 1150:2254.902 1200:2352.941 1250:2449.5", pt, " ")
+            for (i = 1; i <= n; i++) { split(pt[i], v, ":"); pt[i] = (v[1] / 1275.0) ":" v[2] }
+            lux = "0:11 1:15 2:22 3:26 4:31 5:35 10:46 15:62 20:79 25:88 50:93 100:99 300:111 500:130 1000:200 2000:400 3000:600 4000:800 5000:1000 6000:1200 7000:1400 8000:1600 9000:1800 10000:2000 12000:2450"
+        }
         if (wide == "wide") printf "        <point><value>0.00001</value><nits>0.05</nits></point>\n        <point><value>0.000366255</value><nits>0.3</nits></point>\n"
         for (i = 1; i <= n; i++) {
             split(pt[i], v, ":"); f = v[1] * k
@@ -1531,14 +1551,13 @@ DDCEOF
             printf "        <point><value>%.6g</value><nits>%s</nits></point>\n", f, v[2]
         }
         # The top: the panel peak, 2600 nits on the Fold (490.75 per unit of brightnessMaximum).
-        if (wide == "wide") printf "        <point><value>1.0</value><nits>%.1f</nits></point>\n", 2600.0 / k
+        if (wide == "wide") printf "        <point><value>1.0</value><nits>%.1f</nits></point>\n", peak
         printf "    </screenBrightnessMap>\n"
         if (auto != "auto") exit
         printf "    <autoBrightness enabled=\"true\">\n        <luxToBrightnessMapping>\n            <map>\n"
         # The table again as float per nits; above its last point the slope to the peak.
         for (i = 1; i <= n; i++) { split(pt[i], v, ":"); tf[i] = v[1] * k; tn[i] = v[2] + 0 }
-        peak = 2600.0 / k
-        c = split("0:4 1:6 2:8 4:11 8:15 15:21 30:30 60:45 100:60 200:85 400:120 700:160 1200:210 2000:270 4000:350 7000:430 10000:520 20000:750 35000:1050 50000:1250 80000:1400", lx, " ")
+        c = split(lux, lx, " ")
         last = -1
         for (j = 1; j <= c; j++) {
             split(lx[j], v, ":"); want = v[2] + 0
@@ -1621,6 +1640,11 @@ else
         [ -e "$ROOTFS/system_ext/framework/miui-services.jar" ] || [ -e "$ROOTFS/system/system_ext/framework/miui-services.jar" ]; then
         DDC_AUTO=""
     fi
+    # A phone whose own brightness tables are in ddc_xml.
+    DDC_PANEL=""
+    case "$(getprop ro.product.vendor.device) $(getprop ro.product.device)" in
+        e1s*|*" e1s") DDC_PANEL=e1s ;;
+    esac
     DDC_MAX=""
     for port in $DDC_PORTS; do
         # One UI's brightnessMaximum for this panel (dumpsys display, captured
@@ -1628,14 +1652,14 @@ else
         m=$(grep 'DisplayDeviceInfo{' "$STAGE/display_modes_host.log" 2>/dev/null | grep -E "port=$port[},]" |
             sed -n 's/.*brightnessMaximum \([0-9.]*\).*/\1/p' | head -n 1)
         DDC_MAX="$DDC_MAX $port:${m:-?}"
-        if [ $DDC_PROX = 1 ]; then ddc_xml $DDC_RANGE "$m" $DDC_AUTO
-        else ddc_xml $DDC_RANGE "$m" $DDC_AUTO | sed '/<proxSensor>/,/<\/proxSensor>/d'
+        if [ $DDC_PROX = 1 ]; then ddc_xml $DDC_RANGE "$m" "$DDC_AUTO"
+        else ddc_xml $DDC_RANGE "$m" "$DDC_AUTO" "$DDC_PANEL" | sed '/<proxSensor>/,/<\/proxSensor>/d'
         fi > "$DOV/up/displayconfig/display_port_$port.xml"
     done
     chmod 755 "$DOV/up" "$DOV/up/displayconfig" && chmod 644 "$DOV/up/displayconfig/"*.xml
     $BB chcon -R u:object_r:system_file:s0 "$DOV/up" 2>/dev/null || true
     if $BB mount -t overlay overlay -o "ro,lowerdir=$DOV/up:$PETC" "$PETC"; then
-        echo "Display config: product/etc/displayconfig/display_port_ for ports ${DDC_PORTS:-none} (One UI's nits curve, brightnessMaximum${DDC_MAX:- none}$([ $DDC_PROX = 1 ] && echo ", Samsung's IR proximity")$([ -n "$DDC_AUTO" ] && echo ", a lux curve for automatic brightness"))"
+        echo "Display config: product/etc/displayconfig/display_port_ for ports ${DDC_PORTS:-none} (One UI's nits curve, brightnessMaximum${DDC_MAX:- none}$([ $DDC_PROX = 1 ] && echo ", Samsung's IR proximity")$([ -n "$DDC_AUTO" ] && echo ", a lux curve for automatic brightness")$([ -n "$DDC_PANEL" ] && echo ", the $DDC_PANEL panel's own tables"))"
         # For the UI activator (oneos_switch.sh): the switch in Settings.
         if [ -n "$DDC_AUTO" ] && [ -n "$DDC_PORTS" ]; then touch "$STAGE/data/oneos_auto_brightness"; fi
     else
