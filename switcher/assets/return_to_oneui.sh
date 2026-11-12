@@ -556,6 +556,12 @@ if [ "$MODE" = inplace ]; then
     for c in /data/adb/ksu/bin/resetprop /data/adb/ap/bin/resetprop /debug_ramdisk/resetprop /sbin/resetprop; do
         [ -x "$c" ] && { RP=$c; break; }
     done
+    RPF=$(getprop ro.build.fingerprint 2>/dev/null)
+    if [ -n "$RP" ] && [ -n "$RPF" ] && [ "$("$RP" ro.build.fingerprint 2>/dev/null)" != "$RPF" ] &&
+       [ "$("$S/rp/resetprop" ro.build.fingerprint 2>/dev/null)" = "$RPF" ]; then
+        echo "$RP does not read properties any more; using the preflight's copy"
+        RP="$S/rp/resetprop"
+    fi
     why=""
     case "$(getprop oneos.guest.powerctl)" in shutdown*) why="the guest asked to shut down" ;; esac
     [ -n "$BB" ] || why="no busybox"

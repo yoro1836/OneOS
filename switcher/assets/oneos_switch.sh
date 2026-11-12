@@ -62,6 +62,16 @@ done
 [ -n "$RP" ] && [ -x "$RP" ] || refuse "no resetprop at the root manager's paths: One UI's persist.* props could not be saved and restored"
 FP=$(getprop ro.build.fingerprint 2>/dev/null)
 [ -n "$FP" ] && [ "$("$RP" ro.build.fingerprint 2>/dev/null)" = "$FP" ] || refuse "$RP does not read properties"
+# A copy of it for the session. On the S24 (KernelSU, the root of one boot)
+# the manager's resetprop answered here and was an empty file by the time
+# guest_props.sh added the guest's properties (9c5a710: /data/adb/ksud 0 bytes,
+# every call "exit 0" and nothing done: 121 of 138 properties not there, VoLTE
+# and the session's overrides gone, nothing put back at the return).
+# guest_props.sh and the return fall back to this copy when the manager's one
+# stops answering.
+mkdir -p "$STAGE/rp" 2>/dev/null && cp -L "$RP" "$STAGE/rp/resetprop.new" 2>/dev/null &&
+    chmod 755 "$STAGE/rp/resetprop.new" && mv -f "$STAGE/rp/resetprop.new" "$STAGE/rp/resetprop" ||
+    rm -f "$STAGE/rp/resetprop.new" "$STAGE/rp/resetprop"
 command -v sha256sum >/dev/null 2>&1 || refuse "no sha256sum"
 command -v getevent >/dev/null 2>&1 || app_refuse "no getevent: Volume Up + Volume Down could not return to One UI"
 
@@ -1567,6 +1577,8 @@ FIT
 chmod 755 "$STAGE/guest_panel_fit.sh"
 
 # The guest's own build props (ro.oplus.* etc.), now that its rootfs is mounted.
+[ "$("$RP" ro.build.fingerprint 2>/dev/null)" = "$FP" ] ||
+    { [ "$("$STAGE/rp/resetprop" ro.build.fingerprint 2>/dev/null)" = "$FP" ] && RP="$STAGE/rp/resetprop"; }
 /system/bin/sh "$STAGE/guest_props.sh" add "$STAGE/rootfs"
 if [ -f "$STAGE/data/oneos_root/enabled" ]; then
     # Bounded, each part timed. Galaxy S24 Ultra ColorOS report 0756b014
