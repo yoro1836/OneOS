@@ -150,12 +150,16 @@ data class GateInput(
     val onPhone: StagedRaw? = null,
     /** switcher/patches/host_installd.txt as the app ships it; null = compare with the pinned hash only. */
     val expectedInstalld: String? = null,
+    /** switcher/patches/host_installd_a16.txt as the app ships it, for SDK 36 images (0.4.66); null = pinned hash only. */
+    val expectedInstalldA16: String? = null,
     /** PREPARE: bytes root frees before receiving (the old system.raw of an adopted stage). */
     val reclaimBytes: Long = 0,
     /** This app's versionCode; when set, a stage marked by another build must be prepared again. */
     val appVersionCode: Int? = null,
     /** The last session's logs are not collected yet (WARN only). */
     val uncollectedLogs: Boolean = false,
+    /** Zygisk Next's module versionCode when the module is enabled on this phone (status.list); null = not there. */
+    val zygiskNextVersionCode: Int? = null,
     /**
      * The series this APK was built for (BuildConfig.SERIES); null = the
      * all-in-one build with every set. A phone of another series gets
@@ -202,6 +206,16 @@ object SwitchGates {
     const val ID_BATTERY = "gate-battery"
     const val ID_CARRIER = CarrierRules.ID
     const val ID_LOGS = "gate-logs"
+    const val ID_ZYGISK = "gate-zygisk-next"
+
+    /**
+     * Zygisk Next injects into the other system's zygote too. Its 1.5.2 (build 864) left a file
+     * descriptor there that the guest's zygote refuses when it starts the system server ("JNI
+     * FatalError called: (system_server) Unsupported st_mode for FD 5"): ColorOS, HyperOS, Infinity-X
+     * and Pixel all stopped at the boot animation on the S24 Ultra (0.4.66 677f47c6, 0.4.70 d66d9e6d,
+     * 7b99e4c0). 1.5.3 (build 880) injected on the S23 (0.4.70 306bf73a) and the session ran.
+     */
+    const val ZYGISK_NEXT_OK_FROM = 880
 
     /** The OneLineage switcher: it copies its own scripts into the stage every time it opens. */
     const val OLD_SWITCHER_PACKAGE = "com.wewaffles.onelineage"
@@ -216,6 +230,9 @@ object SwitchGates {
     const val R_PROFILE_DISABLED = "disabled"
     const val R_PROFILE_UNTESTED = "untested"
     const val R_ANDROID_DIFFERS = "differs"
+
+    /** One UI is older than every system the phone is offered (One UI 8.5 where all are Android 17): update One UI. */
+    const val R_ANDROID_OLDER = "older"
     const val R_FORM_MISMATCH = "mismatch"
     const val R_IMAGE_NOT_IN_BUILD = "not-in-build"
     const val R_IMAGE_OTHER_SERIES = "other-series"
@@ -241,6 +258,7 @@ object SwitchGates {
     const val R_BATTERY_LOW = "low"
     const val R_BATTERY_HOT = "hot"
     const val R_LOGS = "not-collected"
+    const val R_ZYGISK_OLD = "zygisk-next-old"
 
     const val BATTERY_MIN_PERCENT = 30
     const val BATTERY_MAX_C = 42f
@@ -293,9 +311,11 @@ object SwitchGates {
         val image = choice?.let { Images.byId(it.imageId, images) }
         val set = choice?.let { PackageSets.byId(it.packageSetId, sets) }
 
+        // 0.4.74: no switching on a custom ROM ([CustomRomRule]).
+        f.customRom?.let { out += Gate(it) }
         out += Gate(root(f))
         out += profileGate(f, resolution, profiles, switching, choice, image, images)
-        out += Gate(android(f, image, images))
+        out += Gate(android(f, image, profile, images))
         if (profile != null) {
             out += Gate(form(f, profile))
             out += Gate(
@@ -317,7 +337,7 @@ object SwitchGates {
                 },
             )
         }
-        out += Gate(installd(input))
+        out += Gate(installd(input, image))
         out += Gate(oldSwitcher(input.oldSwitcherInstalled))
         out += Gate(stageIdle(input.stage))
         space(phase, input, image, set)?.let { out += Gate(it) }
@@ -344,6 +364,18 @@ object SwitchGates {
                     "Switching again moves them aside and the session after that replaces them. Collect them " +
                         "first in Last session if something went wrong.",
                     R_LOGS,
+                ),
+            )
+        }
+        val zn = input.zygiskNextVersionCode
+        if (switching && zn != null && zn < ZYGISK_NEXT_OK_FROM) {
+            out += Gate(
+                Finding(
+                    ID_ZYGISK, Level.WARN, "Zygisk Next $zn may stop the other system",
+                    "Zygisk Next injects into the other system's zygote; build $zn (1.5.2 or older) leaves a file " +
+                        "descriptor there that stops its system server at the boot animation. Update Zygisk Next to " +
+                        "1.5.3 or newer, or disable it in your root manager and restart, before switching.",
+                    R_ZYGISK_OLD,
                 ),
             )
         }
@@ -444,14 +476,30 @@ object SwitchGates {
         )
     }
 
-    private fun android(f: DeviceFacts, image: ImageRef?, images: List<ImageRef>): Finding {
-        val sdks = (image?.let { listOf(it.sdk) } ?: images.map { it.sdk }).distinct().sorted()
+    /**
+     * The phone's Android version against the chosen image; with none chosen, against the systems this phone
+     * is offered (0.4.85: every image of the build counted before, so a One UI 8.5 phone whose systems are
+     * all Android 17 passed here and was refused by the installd gate as "One UI was updated").
+     */
+    private fun android(f: DeviceFacts, image: ImageRef?, profile: PhoneProfile?, images: List<ImageRef>): Finding {
+        val offered = profile?.choices?.mapNotNull { Images.byId(it.imageId, images) }?.map { it.sdk }?.distinct()?.sorted().orEmpty()
+        val sdks = image?.let { listOf(it.sdk) } ?: offered.ifEmpty { images.map { it.sdk }.distinct().sorted() }
+        val have = f.androidRelease.ifEmpty { AndroidRelease.name(f.sdk) }
         return if (f.sdk in sdks) {
             Finding(ID_ANDROID, Level.OK, "Android ${AndroidRelease.name(f.sdk)}", "SDK ${f.sdk}, the same as the image.")
+        } else if (profile != null && offered.isNotEmpty() && f.sdk < offered.first()) {
+            // No system of this phone runs next to its One UI: nothing to choose, One UI has to be updated.
+            block(
+                ID_ANDROID, "One UI is older than this phone's systems",
+                "This phone runs Android $have (SDK ${f.sdk}); the systems for the ${profile.label} are Android " +
+                    "${offered.joinToString { AndroidRelease.name(it) }} (SDK ${offered.joinToString()}). " +
+                    "The other system shares One UI's system services, so both must be the same Android version: update One UI first.",
+                R_ANDROID_OLDER,
+            )
         } else {
             block(
                 ID_ANDROID, "Android version differs from the image",
-                "This phone runs Android ${f.androidRelease.ifEmpty { AndroidRelease.name(f.sdk) }} (SDK ${f.sdk}); " +
+                "This phone runs Android $have (SDK ${f.sdk}); " +
                     "the image is Android ${sdks.joinToString { AndroidRelease.name(it) }} (SDK ${sdks.joinToString()}). " +
                     "The other system shares One UI's system services, so both must be the same Android version.",
                 R_ANDROID_DIFFERS,
@@ -501,8 +549,12 @@ object SwitchGates {
         }
     }
 
-    private fun installd(input: GateInput): Finding {
-        val p = InstalldExpected.problems(input.installd, input.expectedInstalld)
+    private fun installd(input: GateInput, image: ImageRef? = null): Finding {
+        // The chosen image's Android version decides the table (0.4.66: One UI 8.5/8.0 for SDK 36 images).
+        // With no system chosen yet, the phone's own (0.4.85: Android 17's table was used, so every
+        // One UI 8.5 phone with nothing set up, or with a stage of another file set, read "One UI was updated").
+        val sdk = image?.sdk ?: input.facts.sdk.takeIf { InstalldExpected.carried(it) != null } ?: 37
+        val p = InstalldExpected.problems(input.installd, if (sdk == 36) input.expectedInstalldA16 else input.expectedInstalld, sdk)
         return if (p.isEmpty()) {
             Finding(
                 ID_INSTALLD, Level.OK, "installd interface matches the OneOS files",

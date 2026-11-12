@@ -69,6 +69,9 @@ object RootScript {
     }
 
     enum class Verb(val word: String, val stdin: Stdin) {
+        GUEST_RUNTIME("guest-runtime", Stdin.SCRIPT),
+        GUEST_MODULE("guest-module", Stdin.DATA),
+        GUEST_MODULE_STATE("guest-module-state", Stdin.NONE),
         BEGIN("begin", Stdin.SCRIPT),
         RECEIVE("receive", Stdin.DATA),
         KEEP_RAW("keep-raw", Stdin.NONE),
@@ -100,6 +103,25 @@ object RootScript {
          * works before the first prepare and after an earlier update.
          */
         SELFUPDATE("selfupdate", Stdin.SCRIPT),
+
+        /**
+         * Bring apps (0.4.75): copy the chosen user apps' APKs and their
+         * One UI `/data` into the guest's data tree (`$STAGE/data/oneos_bring`,
+         * read by the guest at `/data/oneos_bring`), so the guest can start
+         * them signed in. stdin is the package list (one per line); only runs
+         * against the prepared, hash-pinned stage.
+         */
+        BRING_COLLECT("bring-collect", Stdin.DATA),
+
+        /** Delete the brought-apps copies the stage holds (`$STAGE/data/oneos_bring`). */
+        BRING_CLEAR("bring-clear", Stdin.NONE),
+
+        /**
+         * Read only (build 104): each brought app the stage holds, what became of
+         * it in the guest (waiting, installed, failed and why) and whether One
+         * UI's app or its data is newer than the copy.
+         */
+        BRING_STATUS("bring-status", Stdin.NONE),
     }
 
     /**
@@ -115,6 +137,7 @@ object RootScript {
 
     /** Session scripts from switcher/assets and the expected installd table, staged with every set. */
     val SCRIPTS: List<String> = listOf(
+        "guest_runtime.sh", "guest_root", "guest_zygiskd", "guest_zygisk_ptrace", "guest_zygisk.so", "guest_vector.bundle", "guest_manager.apk",
         "oneos_switch.sh", "boot_status.sh", "OneOSBootStatus.dex", "oneos_boot_icon.png", "guest_prepare.sh", "guest_start.sh", "guest_props.sh", "return_to_oneui.sh", "libsec-ril-patch.sh",
         "check_host_apex.sh", "bridges.sh", "fold8_coloros.sh", "OneOSFold8Geometry.dex", "fold8_pixel.sh", "guest_google.sh", "zygote_exec", "OneOSEdmStub.dex", "OneOSImsDmStub.apk", "oneos_btaudio", "OneOSOverlayDimen.dex", "host_installd.txt",
     )
@@ -142,6 +165,18 @@ object RootScript {
             if (!re.matches(a)) p += "${verb.word}: '$a' is not $what"
         }
         when (verb) {
+            Verb.GUEST_RUNTIME -> {
+                need(2); arg(0, ID, "an image id")
+                args.getOrNull(1)?.let { if (it !in setOf("status", "enable", "disable") && !Regex("^select-[A-Za-z][A-Za-z0-9._-]{1,63}$").matches(it)) p += "invalid guest runtime action" }
+            }
+            Verb.GUEST_MODULE_STATE -> {
+                need(3); arg(0, ID, "an image id"); arg(1, Regex("^[A-Za-z][A-Za-z0-9._-]{1,63}$"), "a module id")
+                args.getOrNull(2)?.let { if (it !in setOf("on", "off", "remove", "restore")) p += "invalid module state" }
+            }
+            Verb.GUEST_MODULE -> {
+                need(4); arg(0, ID, "an image id"); arg(1, Regex("^[A-Za-z][A-Za-z0-9._-]{1,63}$"), "a module id")
+                arg(2, DEC, "a size"); arg(3, HEX64, "a SHA-256")
+            }
             Verb.BEGIN -> {
                 need(5)
                 args.getOrNull(0)?.let { m -> if (BeginMode.entries.none { it.word == m }) p += "begin: mode '$m'" }
@@ -187,7 +222,11 @@ object RootScript {
                 args.getOrNull(6)?.let { if (it != "0" && it != "1") p += "launch: Knox edm stub '$it' is not 0 or 1" }
                 args.getOrNull(7)?.let { if (it != "0" && it != "1") p += "launch: verbose boot is not 0 or 1" }
             }
-            Verb.RECOVER, Verb.OLD_LIST, Verb.REMOVE -> need(0)
+            Verb.RECOVER, Verb.OLD_LIST, Verb.REMOVE, Verb.BRING_CLEAR, Verb.BRING_STATUS -> need(0)
+            Verb.BRING_COLLECT -> {
+                need(1)
+                arg(0, DEC, "a size")
+            }
             Verb.SELFUPDATE -> {
                 need(3)
                 arg(0, DEC, "a size")
@@ -276,7 +315,7 @@ case "$1" in
             exit 2
         fi
         ;;
-    old-list|purge|restore)
+    old-list|purge|restore|guest-runtime)
         if [ ! -f "$S/.oneos_stage" ] || [ ! -d "$S/bin" ] || ! mine "$S" || ! mine "$S/bin"; then
             echo "@@REFUSED OneOS has no prepared stage on this phone: prepare one first"
             exit 2
@@ -348,6 +387,11 @@ class RootReply {
         when {
             l.startsWith("@@STEP ") -> return rest("@@STEP").also { steps += it }
             l.startsWith("@@INFO ") -> infos += rest("@@INFO")
+            // Hex-encoded module metadata has its own bounded schema and can exceed a log line.
+            l.startsWith("@@RESULT module-info ") -> {
+                val row=l.removePrefix("@@RESULT ")
+                if(row.length <= 8192) results += row
+            }
             l.startsWith("@@RESULT ") -> results += rest("@@RESULT")
             l.startsWith("@@OK") -> ok = rest("@@OK")
             l.startsWith("@@REFUSED") -> refused = rest("@@REFUSED")

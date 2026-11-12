@@ -81,16 +81,23 @@ if [ "$1" = baseline ]; then
     [ -n "$BB" ] || { echo "In-place baseline: no busybox, not taken (the return will reboot)"; exit 0; }
     rm -rf "$BASE"; mkdir -p "$BASE" || exit 0
     cat /proc/sys/kernel/random/boot_id > "$BASE/boot_id" 2>/dev/null
-    getprop > "$BASE/props"
-    getenforce > "$BASE/selinux" 2>&1
-    apex_state > "$BASE/apex"
-    apex_overlays > "$BASE/apex_overlays"
-    ip rule show > "$BASE/iprule" 2>&1
-    for f in /sys/fs/f2fs/*/gc_urgent; do [ -f "$f" ] && echo "$f $(cat "$f" 2>/dev/null)"; done > "$BASE/gc_urgent"
-    for n in $HOST_NAMES; do p=$(svc_pid "$n"); echo "$n ${p:-none}"; done > "$BASE/svcpid"
-    ls -lZ /dev/watchdog* > "$BASE/watchdog" 2>&1
+    ( getprop > "$BASE/props" ) &
+    ( getenforce > "$BASE/selinux" 2>&1 ) &
+    ( apex_state > "$BASE/apex" ) &
+    ( apex_overlays > "$BASE/apex_overlays" ) &
+    ( ip rule show > "$BASE/iprule" 2>&1 ) &
+    ( for f in /sys/fs/f2fs/*/gc_urgent; do [ -f "$f" ] && echo "$f $(cat "$f" 2>/dev/null)"; done > "$BASE/gc_urgent" ) &
+    # One UI's CPU sets and core control, which init writes only at boot; a guest's
+    # performance service can write them (vivo QoS: split screen, VCFA).
+    ( for f in /dev/cpuset/cpus /dev/cpuset/*/cpus /sys/devices/system/cpu/cpu*/core_ctl/enable; do
+        [ -f "$f" ] && echo "$f $(cat "$f" 2>/dev/null)"
+    done > "$BASE/cpuset" ) &
+    : > "$BASE/svcpid"
+    for n in $HOST_NAMES; do ( p=$(svc_pid "$n"); echo "$n ${p:-none}" >> "$BASE/svcpid" ) & done
+    ( ls -lZ /dev/watchdog* > "$BASE/watchdog" 2>&1 ) &
     # One UI's linker namespaces (a tmpfs the guest's tree binds), compared at the return.
-    "$BB" find /linkerconfig -type f -exec "$BB" sha256sum {} + > "$BASE/linkerconfig" 2>/dev/null
+    ( "$BB" find /linkerconfig -type f -exec "$BB" sha256sum {} + > "$BASE/linkerconfig" 2>/dev/null ) &
+    wait
     # The kernel log from here on is scanned for I/O errors on these devices.
     m="oneos-baseline $(date +%s)"
     echo "$m" > /dev/kmsg 2>/dev/null && echo "$m" > "$BASE/kmsg"
@@ -208,6 +215,17 @@ else
     [ -n "$gp" ] && why="no busybox, or $DR not usable"
     echo "$(date +%T) Guest Bluetooth, audio and location at the return: not read ($why)"
 fi
+
+# servicemanager logs to the kernel log, not logcat: the guest's system_server
+# died on "SELinux denied for service" while adding Oplus services (S22 Ultra
+# Exynos OxygenOS 0.4.70 e01601e0, S24 Exynos ColorOS 0.4.68 fbe805b2; the same
+# model ran on another phone) and no bundle said why. Its last lines, and the
+# catch-all line of One UI's service_contexts that every guest-only service name
+# needs even in a permissive session (docs/inplace-return.md). Read only.
+if [ -n "$BB" ]; then sm=$("$BB" dmesg 2>/dev/null | "$BB" grep -E 'servicemanager|SELinux: No match' | "$BB" tail -n 6)
+else sm=$(dmesg 2>/dev/null | grep -E 'servicemanager|SELinux: No match' | tail -n 6); fi
+[ -n "$sm" ] && echo "$sm" | sed 's/^/servicemanager (kernel log): /'
+echo "service_contexts catch-all lines in One UI's plat_service_contexts: $(grep -c '^\*' /system/etc/selinux/plat_service_contexts 2>/dev/null)"
 
 echo "=== [1/4] $(date +%T) Terminating Container Supervision & Zygote ==="
 # A screen recording (guest_start.sh) is finalised on SIGINT; SIGKILL would
@@ -439,7 +457,8 @@ for t in tsp tsp1 tsp2; do
     f=$S/data/oneos_dt2w_armed.$t
     [ -f "$f" ] && [ ! -L "$f" ] || continue
     if [ -w /sys/class/sec/$t/enabled ]; then
-        echo 2,0 > /sys/class/sec/$t/enabled; echo 2,1 > /sys/class/sec/$t/enabled
+        # 2,1 is the write that acts; the older drivers answer 2,0 with an error (see the keeper).
+        echo 2,0 > /sys/class/sec/$t/enabled 2>/dev/null; echo 2,1 > /sys/class/sec/$t/enabled
         echo "Touchscreen $t: back from the guest's double-tap low-power mode (enabled=$(cat /sys/class/sec/$t/enabled 2>/dev/null))"
     fi
     rm -f "$f"
@@ -520,6 +539,12 @@ if [ "$MODE" = inplace ]; then
     fi
 fi
 
+if [ -f /data/local/tmp/oneos/data/oneos_root/enabled ]; then
+    if ! STAGE=/data/local/tmp/oneos /system/bin/sh /data/local/tmp/oneos/guest_runtime.sh verify-return; then
+        echo "Guest full-stack runtime: return audit failed; reboot fallback"
+        MODE=reboot
+    fi
+fi
 # OneOS: return by rebooting unless asked otherwise. Restarting One UI in place
 # after a session left one of its decompressed APEXes unreadable every time
 # (NFC, uwb, wifi): SIGBUS crash loops, RescueParty, and once an ext4
@@ -815,11 +840,18 @@ for k in crashrecovery.rescue_boot_start crashrecovery.boot_mitigation_count cra
 done
 "$RP" -n sys.rescue_boot_count 0 2>/dev/null
 "$RP" -n crashrecovery.rescue_boot_count 0 2>/dev/null
+# qemu.hw.mainkeys: AOSP's DisplayPolicy reads it at start ("1" = no navigation
+# bar); vivo's VivoDisplayPolicyImpl.setVivoNavBar(false) sets it to 1 when it
+# removes its own bar for gestures, and the seventh OriginOS run's return left
+# it at 1 for One UI's system_server. vold.has_adoptable: One UI's vold is not
+# restarted and set it once.
 for k in ro.control_privapp_permissions \
          audio.offload.disable audio.deep_buffer.media audio.offload.video vendor.audio.offload.track.enable \
-         service.bootanim.exit oneos.guest.powerctl; do
+         service.bootanim.exit oneos.guest.powerctl oneos.vivo.inner_display qemu.hw.mainkeys vold.has_adoptable; do
     put_back "$k"
 done
+[ "$(getprop qemu.hw.mainkeys)" = "$(base_prop qemu.hw.mainkeys)" ] ||
+    failsafe "qemu.hw.mainkeys is still the guest's ($(getprop qemu.hw.mainkeys)): One UI would start without its navigation bar"
 for k in $(getprop | "$BB" sed -n 's/^\[\(log\.tag\.[^]]*\)\]: .*/\1/p'); do put_back "$k"; done
 # debug.* (surfaceflinger, hwui, renderengine) the guest set through the shared
 # property service: One UI's surfaceflinger reads them at start.
@@ -867,6 +899,13 @@ restorecon /dev/block/loop* /dev/loop* 2>/dev/null
     say "f2fs $f is $(cat "$f" 2>/dev/null), was $v at the switch"
     case "$v" in 0|GC_NORMAL) echo 0 > "$f" 2>/dev/null ;; esac
 done < "$BASE/gc_urgent"
+# CPU sets and core control as One UI had them (same boot: the baseline is this session's).
+[ -f "$BASE/cpuset" ] && [ "$(cat /proc/sys/kernel/random/boot_id 2>/dev/null)" = "$(cat "$BASE/boot_id" 2>/dev/null)" ] && while read -r f v; do
+    [ -f "$f" ] || continue
+    [ "$(cat "$f" 2>/dev/null)" = "$v" ] && continue
+    case "$v" in ''|*[!0-9,-]*) continue ;; esac
+    echo "$v" > "$f" 2>/dev/null && say "$f put back to $v (the guest had changed it)"
+done < "$BASE/cpuset"
 
 # Display: the composer still holds the guest's dead surfaceflinger as its
 # client (guest_start.sh restarted it for the guest); its onrestart starts One
@@ -1065,10 +1104,18 @@ if [ -d "$LOGS" ] && [ ! -L "$LOGS" ]; then
     # Integrity requests; report 9455098f), taken once from this capture three
     # minutes after the return, at the lowest priority, 2 MiB at most. Until
     # test build 6 a logcat -e watch took them live at 65% of a core.
+    # Two minutes at most (0.4.74): the regex over up to 24 x 32 MiB, one of
+    # them still being written, kept a whole core busy for the next session:
+    # S26 2f97ffa9 (0.4.72, return 02:24, grep at 100% CPU in every sampler
+    # line of the 02:34-02:55 session, 100%nice; "CPU 85-90 C") and S22 Ultra
+    # acd15d4c (0.4.73, return 14:37, grep at 90-103% from 16:57 to the end
+    # of the next session). Its waiter's PID in store_watch.pid: a session
+    # starting within the three minutes ends it (oneos_switch.sh).
     ONEOS_RE='IQ: Notifying installation update|IV2: (Rejecting|request install failure)|cannot process install request|Unauthenticated delivery|Cannot get valid account|Unauth not supported|No current account found|INSTALL_FAILED|installation completed for package|Commit of session|Download failed|DS: .*(error|fail)|setKeyAttestationCheckFailed|finishCalled for ControlledActivity, resultCode|AccountManager notifies account update|Device is now provisioned|requestExpressIntegrityToken|requestIntegrityToken|Integrity key attestation|no longer exists|account is null|Cached accounts updated|No account for auth token|IV2: Task Failed|Refreshing user settings' ONEOS_L="$LOGS" ONEOS_S="$S" "$BB" sh -c '
         sleep 180
         cd "$ONEOS_L" || exit 0
-        nice -n 19 grep -h -E -e "$ONEOS_RE" $(ls -tr boot.log* 2>/dev/null) 2>/dev/null | head -c 2097152 > "$ONEOS_S/store_watch.log"' </dev/null >/dev/null 2>&1 &
+        nice -n 19 timeout 120 grep -h -E -e "$ONEOS_RE" $(ls -tr boot.log* 2>/dev/null) 2>/dev/null | head -c 2097152 > "$ONEOS_S/store_watch.log"' </dev/null >/dev/null 2>&1 &
+    echo $! > "$S/store_watch.pid"
     STOP_TOKEN="$(date +%s).$$"
     echo "$STOP_TOKEN" > "$LOGS/logcat.stop" 2>/dev/null
     "$BB" sh -c "sleep 600; [ \"\$(cat $LOGS/logcat.stop 2>/dev/null)\" = $STOP_TOKEN ] || exit 0; rm -f $LOGS/logcat.stop; pkill -f '^logcat .*/data/local/tmp/oneos_logs/boot.log'" </dev/null >/dev/null 2>&1 &

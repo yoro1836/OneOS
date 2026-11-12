@@ -153,7 +153,13 @@ object Plain {
                 )
                 else -> m("This phone isn't supported yet", "OneOS works on ${phoneList(profiles)}.", FixAction.SEND_PHONE_DETAILS)
             }
-            SwitchGates.ID_ANDROID -> {
+            SwitchGates.ID_ANDROID -> if (r == SwitchGates.R_ANDROID_OLDER) {
+                // Every system of this phone is for a newer Android than its One UI: nothing to choose.
+                val want = (image?.sdk ?: phone?.choices?.mapNotNull { Images.byId(it.imageId)?.sdk }?.minOrNull())
+                    ?.let { "Android ${AndroidRelease.name(it)}" } ?: "a newer Android"
+                val have = facts.phoneAndroid?.let { ". Your phone has Android $it: " } ?: ": "
+                m("Update One UI first", "The systems for $yourPhone need $want${have}update One UI, then open OneOS again.", FixAction.NONE)
+            } else {
                 val want = image?.let { AndroidRelease.name(it.sdk) }
                 val have = facts.phoneAndroid
                 m(
@@ -269,6 +275,21 @@ object Plain {
             SwitchGates.ID_LOGS -> m(
                 "Last session's logs aren't read yet",
                 "OneOS reads them by itself after you come back.",
+                FixAction.NONE,
+            )
+            CustomRomRule.ID -> when (r) {
+                CustomRomRule.R_PORT -> m(
+                    "OneOS needs stock One UI",
+                    "This phone runs One UI made for another phone. If it's stock, turn off any module that changes the model name and restart.",
+                    FixAction.NONE,
+                )
+                CustomRomRule.R_NOT_ONE_UI -> m("OneOS needs stock One UI", "This phone runs a custom ROM without One UI.", FixAction.NONE)
+                else -> m("OneOS needs a Samsung phone", "It runs next to stock One UI only.", FixAction.NONE)
+            }
+            SwitchGates.ID_ZYGISK -> m(
+                "Update Zygisk Next first",
+                "This Zygisk Next stops the other system at its boot animation. Update it to 1.5.3 or newer, " +
+                    "or turn it off in your root app and restart.",
                 FixAction.NONE,
             )
             else -> unknown(f)

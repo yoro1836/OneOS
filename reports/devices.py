@@ -15,7 +15,7 @@ Snapdragon, docomo and Exynos builds, together):
     a message naming a phone gets its answer.
 Phones only in the next, unreleased app (--upcoming ID,... --next VERSION, e.g. a35,a54,a16-s166 for 0.4.59)
 read "comes with OneOS VERSION" instead of their systems: drop the flags at that release.
-Phones in reports/waiting.json (findings sent, no profile: One UI 8.5 or older, or a tablet) get
+Phones in reports/waiting.json (findings sent, no profile: One UI 7 or older, or a tablet) get
 the same entry and filter with "not yet" and the One UI their findings showed.
 Per system: what recent reports (the last --days days) say, else "tested by the team" (a session
 has run there, the app's tested flag), else "not tested yet". Counts and item names only: no
@@ -30,6 +30,9 @@ import zipfile
 from collections import defaultdict
 from datetime import date, timedelta
 
+# Names the app has for one chip only ("Galaxy S24+ (Exynos)", no Snapdragon S24+ profile): a one-line
+# reply names the chip, so the owner of the other one does not read it as theirs.
+ONE_CHIP = set()
 LINK = ""  # --link https://github.com/fahadalijaved/OneOS/blob/main/docs/devices.md once it is public
 # The app's own label for the F8U is the profile's id; people know the phone by its name.
 DISPLAY = {"f8u": "Galaxy Z Fold8 Ultra"}
@@ -42,6 +45,8 @@ SHORT = {
     "infinityx41-findx9u": "Infinity-X 4.1",
     "hyperos-lhasa": "HyperOS",
     "nothingos5-metroid": "Nothing OS 5",
+    "oxygenos16-cph2745": "OxygenOS 16",
+    "originos7-pd2609ma": "OriginOS 7",
 }
 CHIP = {
     "SM8850": "Snapdragon 8 Elite Gen 5", "SM8750": "Snapdragon 8 Elite", "SM8650": "Snapdragon 8 Gen 3",
@@ -49,6 +54,7 @@ CHIP = {
     "s5e9965": "Exynos 2600", "s5e9955": "Exynos 2500", "s5e9945": "Exynos 2400", "s5e8855": "Exynos 1580",
     "s5e8865": "Exynos 1680",
     "s5e8835": "Exynos 1380", "s5e8535": "Exynos 1330", "MT6789": "Helio G99",
+    "s5e8845": "Exynos 1480", "SM8450": "Snapdragon 8 Gen 1", "SM7450": "Snapdragon 7 Gen 1",
 }
 # Per phone: a chip that shares another's board code, and the 4G/5G a label leaves out.
 CHIP_OF = {"s-fe-9945": "Exynos 2400e"}
@@ -82,6 +88,8 @@ def variant(p, others=()):
 def triggers(name):
     """What people type: "s25 ultra", "s25u", "fold7", "z fold 7", "flip5", "a56", "tab s9 fe+"..."""
     base = name.lower().replace("galaxy ", "").strip()
+    if "/" in base:  # "Galaxy F55/E55": one phone sold under two names, and people type either
+        return sorted({t for part in base.split("/") for t in triggers(part)}, key=lambda t: (len(t), t))
     # No "galaxy ..." forms: Rose matches whole words anywhere in a message, so "s25 plus" already
     # answers "galaxy s25 plus", while a "galaxy s25" trigger would outrank it (the longer one wins).
     out = {base}
@@ -174,8 +182,8 @@ def status(system, row):
 def waiting_text(w):
     seen = f"; the latest findings from it showed One UI {w['oneui']}" if w.get("oneui") else ""
     if w.get("tablet"):
-        return f"no tablets so far, and OneOS needs One UI 9 (Android 17){seen}"
-    return f"OneOS needs One UI 9 (Android 17){seen}. Send findings again after the update"
+        return f"no tablets so far{seen}"
+    return f"OneOS needs One UI 8 or newer (Android 16 or 17){seen}. Send findings again after the update"
 
 
 def build(devices, rows, upcoming=(), nxt="", waiting=()):
@@ -186,6 +194,9 @@ def build(devices, rows, upcoming=(), nxt="", waiting=()):
             continue
         fams.setdefault(family(p), []).append(p)
     entries = []
+    ONE_CHIP.clear()
+    ONE_CHIP.update(name for name, phones in fams.items()
+                    if len(phones) == 1 and re.search(r"\((Exynos|Snapdragon|MediaTek)\)", phones[0]["label"]))
     for name, phones in fams.items():
         variants = []
         for p in phones:
@@ -203,8 +214,10 @@ def build(devices, rows, upcoming=(), nxt="", waiting=()):
         entries.append((name, variants))
     by_name = {name: variants for name, variants in entries}
     for w in waiting:
-        line = [("🕓", "Not yet", waiting_text(w), "🕓 " + (f"One UI {w['oneui']} now, needs 9" if w.get("oneui") else "needs One UI 9")
-                 + (" (tablet)" if w.get("tablet") else ""))]
+        # A tablet on One UI 8.5 does not "need 8": it waits because it is a tablet.
+        brief = ("tablet" + (f" (One UI {w['oneui']})" if w.get("oneui") else "") + ", not supported yet") if w.get("tablet") \
+            else (f"One UI {w['oneui']} now, needs 8" if w.get("oneui") else "needs One UI 8")
+        line = [("🕓", "Not yet", waiting_text(w), "🕓 " + brief)]
         if w.get("variantOf"):
             by_name[w["variantOf"]].append((w["variant"], line))
         else:
@@ -237,8 +250,8 @@ def markdown(entries, today):
            "Every phone the OneOS app supports, and for each system what testers reported in the last days "
            "(✅ started every time, ⚠️ started on some tries, ❌ did not start, then the checklist items most of them "
            "marked as a problem), what the team tested (✅ tested by the team), "
-           "🔲 not tested yet, or 🔜 comes with the next update; 🕓 phones that sent findings but need One UI 9 "
-           "(Android 17) first, or are tablets. Generated by `reports/devices.py` from the app's phone list and the reports sent "
+           "🔲 not tested yet, or 🔜 comes with the next update; 🕓 phones that sent findings but need One UI 8 "
+           "or newer first, or are tablets. Generated by `reports/devices.py` from the app's phone list and the reports sent "
            "from the app (**Send to the OneOS team**): counts only.", "",
            f"Updated {today}. Every system is still experimental: read the warnings in the [README](../README.md) first.", ""]
     for name, variants in entries:
@@ -276,7 +289,7 @@ def filters(entries, today):
         else:
             names.append(f"{''.join(marks)} {name} (differs by model)")
     if later:
-        names.append("\n🕓 Not yet (One UI 9 needed, or a tablet): " + ", ".join(later))
+        names.append("\n🕓 Not yet (One UI 8 needed, or a tablet): " + ", ".join(later))
     cmds = ["/filter (" + ", ".join(f'"{t}"' for t in OVERVIEW) + ") 📱 Phones OneOS supports\n"
             "✅ started for testers or the team, ⚠️ started on some tries, ❌ did not start, 🔲 not tested yet, "
             "🔜 next update\n\n"
@@ -297,6 +310,17 @@ def filters(entries, today):
         trig = ", ".join(f'"{t}"' if " " in t else t for t in triggers(name))
         cmds.append(f"/filter ({trig}) " + "\n".join(reply))
     return cmds
+
+
+def exact(cmd):
+    """A phone filter that answers only a message that is exactly one of its triggers (Rose's
+    "exact:" type), so a sentence that merely names a phone gets no reply (owner, 2026-11-08: the
+    filters filled the chat). The "which phones" overview keeps matching anywhere."""
+    m = re.match(r"/filter \(([^)]*)\) ", cmd)
+    trig = [t.strip().strip('"') for t in m.group(1).split(",")]
+    if any(t in OVERVIEW for t in trig):
+        return cmd
+    return "/filter (" + ", ".join(f'"exact:{t}"' for t in trig) + ") " + cmd[m.end():]
 
 
 def scan(devices, waiting, inbox):
@@ -323,16 +347,22 @@ def scan(devices, waiting, inbox):
 
 
 LEGEND = "✅ starts every time · ⚠️ some tries · ❌ did not start · 🔲 not tested · 🔜 next update · n/m = started in n of m tries"
-GROUPS = [("s-old", "Galaxy S23 and S24", r"^Galaxy S2[34]"), ("s-new", "Galaxy S25 and S26", r"^Galaxy S2[56]"),
+GROUPS = [("s-22", "Galaxy S22", r"^Galaxy S22"),
+          ("s-old", "Galaxy S23 and S24", r"^Galaxy S2[34]"), ("s-new", "Galaxy S25 and S26", r"^Galaxy S2[56]"),
           ("fold", "Galaxy Z Fold", r"^Galaxy Z Fold"), ("flip", "Galaxy Z Flip", r"^Galaxy Z Flip"),
-          ("a", "Galaxy A", r"^Galaxy [AMF]\d")]
+          ("a", "Galaxy A, F and M", r"^Galaxy [AMF]\d")]
 
 
 def filters_grouped(entries):
     """Few replies for the group: one per series, each phone one line; every phone name still a trigger.
-    Phones that only wait for One UI 9 share one "not yet" reply."""
+    Phones that only wait for One UI 8 share one "not yet" reply."""
     cmds = filters(entries, "")[:1]  # the "which phones" overview
     later, later_trig = [], []
+    # A supported phone outside every series would lose its reply (and get a /stop) without a word:
+    # the S22s did, between their OxygenOS 16 profiles (0.4.67) and 0.4.83.
+    alone = [name for name, variants in entries
+             if not all(l[0] == "🕓" for _, ls in variants for l in ls) and not any(re.match(rx, name) for _, _, rx in GROUPS)]
+    assert not alone, ("no Rose series for", alone)
     for key, title, rx in GROUPS:
         body, trig = [], []
         for name, variants in entries:
@@ -346,7 +376,7 @@ def filters_grouped(entries):
                 fam = next((f for f, k in (("Snapdragon", "Snapdragon"), ("Exynos", "Exynos"), ("MediaTek", "Helio"),
                                            ("MediaTek", "Dimensity")) if k in v), "")
                 net = [x for x in parts[1:] if x in ("4G", "5G")]
-                label = short if len(variants) == 1 else f"{short} ({', '.join([parts[0].replace(' (not ', ', not ').rstrip(')')] + net + ([fam] if fam else []))})"
+                label = short if len(variants) == 1 and name not in ONE_CHIP else f"{short} ({', '.join([parts[0].replace(' (not ', ', not ').rstrip(')')] + net + ([fam] if fam else []))})"
                 body.append(f"{label}: " + " · ".join(l[3] for l in ls))
             trig += triggers(name)
         if not body:
@@ -361,9 +391,10 @@ def filters_grouped(entries):
             later_trig += triggers(name)
     if later:
         cmds.append("/filter (" + ", ".join(f'"{t}"' if " " in t else t for t in later_trig) + ") 🕓 Not yet on OneOS\n"
-                    "Every OneOS system is Android 17, so a phone needs One UI 9 first (tablets are not supported yet). "
+                    "OneOS systems are Android 16 (One UI 8) and Android 17 (One UI 9), so a phone needs One UI 8 or newer "
+                    "(tablets are not supported yet). "
                     "What the findings sent from these showed:\n\n" + "\n".join(later)
-                    + "\n\nGot One UI 9 now? Send findings again from OneOS Probe.")
+                    + "\n\nGot One UI 8 or 9 now? Send findings again from OneOS Probe.")
     for c in cmds:
         assert len(c) < 4000, (len(c), c[:60])
     return cmds
@@ -378,6 +409,9 @@ def main():
     ap.add_argument("--days", type=int, default=10)
     ap.add_argument("--per-phone", action="store_true", help="one Rose reply per phone instead of one per series")
     ap.add_argument("--link", default="", help="the public docs/devices.md URL, once published")
+    ap.add_argument("--match", choices=("exact", "anywhere"), default="exact",
+                    help="exact (default): a phone's reply only for a message that is just its name "
+                         "(Rose's exact: filters); anywhere: also inside any sentence (Rose's default)")
     ap.add_argument("--upcoming", default="", help="profile ids only in the next, unreleased app")
     ap.add_argument("--next", default="", help="that app's version")
     ap.add_argument("--waiting", default="reports/waiting.json")
@@ -400,16 +434,24 @@ def main():
     global LINK
     LINK = a.link
     cmds = filters(entries, today) if a.per_phone else filters_grouped(entries)
-    trig = [t.strip().strip('"') for c in cmds for t in re.match(r"/filter \(([^)]*)\)", c).group(1).split(",")]
+    if a.match == "exact":
+        cmds = [exact(c) for c in cmds]
+    raw = [t.strip().strip('"') for c in cmds for t in re.match(r"/filter \(([^)]*)\)", c).group(1).split(",")]
+    trig = [t.removeprefix("exact:") for t in raw]
     assert len(trig) == len(set(trig)), "a trigger in two filters"
-    old = [l.strip() for l in open(a.in_group)] if os.path.exists(a.in_group) else []
+    old_raw = [l.strip() for l in open(a.in_group)] if os.path.exists(a.in_group) else []
+    old = [l.removeprefix("exact:") for l in old_raw]
     dropped = sorted(set(old) - set(trig) - {""})
+    # A trigger that changes type (plain <-> exact:) is removed first, so its old filter cannot
+    # stay beside the new one.
+    retyped = sorted(set(old_raw) - set(raw) - {""} - set(dropped))
+    dropped = sorted(set(dropped) | set(retyped))
     if dropped:  # a trigger no longer generated would keep its old reply in the group
         cmds.insert(0, "/stop (" + ", ".join(f'"{t}"' if " " in t else t for t in dropped) + ")")
     with open(a.filters, "w") as f:
         f.write("\n\n".join(cmds) + "\n")
     with open(os.path.join(os.path.dirname(a.filters), "rose_triggers.txt"), "w") as f:
-        f.write("\n".join(trig) + "\n")
+        f.write("\n".join(raw) + "\n")
     # Free Rose: 200 filters per chat, and every trigger is one.
     print(f"{len(entries)} phones: {a.md}; {len(cmds)} commands, {len(trig)} triggers of Rose's 200"
           f"{f', /stop for {len(dropped)} dropped' if dropped else ''} in {a.filters}")

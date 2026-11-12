@@ -278,6 +278,11 @@ object ReturnOutcomes {
     private val LIMIT = Regex("""session limit (\d+)s reached""")
     private val NOT_BOOTED = Regex("""guest still not booted after (\d+)s""")
     private const val KEYS = "Volume Up + Volume Down held 3 s"
+    // Two ends that return to One UI in place, so the boot reason is still the phone's last
+    // real boot: read as "The phone restarted without the return" up to 0.4.80 (S26 Ultra
+    // 00655d58, a guest module's installer; S25 Ultra 18d6ead4, a KernelSU soft reboot).
+    private const val MODULES_FAILED = "Guest module installation failed"
+    private const val SOFT_REBOOT_FAILED = "soft reboot failed, returning to One UI"
     private const val SESSION_HEADER = "=== OneOS session "
     private const val LAUNCH_HEADER = "=== OneOS app launch "
 
@@ -300,7 +305,7 @@ object ReturnOutcomes {
         launch.firstOrNull { it.contains("PREFLIGHT REFUSED:") }?.let { return ReturnOutcome(OutcomeKind.REFUSED, null, it.trim(), reason) }
         launch.firstOrNull { it.startsWith("ONEOS_PREPARE_ONLY=1:") }?.let { return ReturnOutcome(OutcomeKind.DRY_RUN, null, it.trim(), reason) }
         // guest_prepare.sh was master_prepare.sh up to 0.3.6: a log of such a session still reads the same.
-        launch.firstOrNull { it.contains(PREPARE_FAILED) || it.contains(PREPARE_FAILED_0_3_6) || it.contains("Aborting and returning to One UI") || it.startsWith("ERROR: One UI's persist") }
+        launch.firstOrNull { it.contains(PREPARE_FAILED) || it.contains(PREPARE_FAILED_0_3_6) || it.contains("Aborting and returning to One UI") || it.startsWith("ERROR: One UI's persist") || it.contains(MODULES_FAILED) }
             ?.let { return ReturnOutcome(OutcomeKind.PREPARE_FAILED, null, it.trim(), reason) }
 
         val ret = autoReturn?.let { lastBlock(it, SESSION_HEADER) }.orEmpty()
@@ -322,6 +327,7 @@ object ReturnOutcomes {
             LIMIT.find(l)?.let { return ReturnOutcome(OutcomeKind.SESSION_LIMIT, it.groupValues[1].toIntOrNull(), l.trim(), reason) }
             NOT_BOOTED.find(l)?.let { return ReturnOutcome(OutcomeKind.BOOT_TIMEOUT, it.groupValues[1].toIntOrNull(), l.trim(), reason) }
             if (l.contains(KEYS)) return ReturnOutcome(OutcomeKind.USER_RETURN, null, l.trim(), reason)
+            if (l.contains(SOFT_REBOOT_FAILED)) return ReturnOutcome(OutcomeKind.GUEST_REBOOT, null, l.trim(), reason)
         }
         return when {
             reason?.startsWith("shutdown,oneos-guest-shutdown") == true -> ReturnOutcome(OutcomeKind.GUEST_SHUTDOWN, null, null, reason)
@@ -362,15 +368,31 @@ object LogBundle {
 
     fun name(sessionId: String): String = "oneos-logs-${sessionId.filter { it.isLetterOrDigit() || it == '-' }.take(40)}"
 
+    /**
+     * The app build that launched the session: stage/current.json's versionCode (the root script's
+     * launch writes the launching app's build there). The bundle's own app is the one that collected
+     * the logs, often a newer one after an update: 0.4.68 sent 0.4.67 sessions as its own (S22 Ultra
+     * 15cf8a3f and 50d5310c, stage current.json versionCode 93), which read as 0.4.68's fixes failing.
+     */
+    fun sessionVersionCode(folder: File): Int? {
+        val f = File(folder, "stage/current.json")
+        if (!f.isFile || f.length() > 64 * 1024) return null
+        return Regex(""""versionCode"\s*:\s*(\d{1,9})""").find(f.readText())?.groupValues?.get(1)?.toIntOrNull()
+    }
+
     fun build(input: LogBundleInput, folder: File, redactor: Redactor, stats: LogStats): File {
         val files = folder.walkTopDown().filter { it.isFile }
             .map { it.relativeTo(folder).invariantSeparatorsPath }
             .filter { it != REPORT && it != SUMMARY && it != REDACTION }
             .sorted().toList()
+        val ran = sessionVersionCode(folder)
         val summary = buildString {
             append("OneOS session logs ${input.sessionId}\n")
             append("App ${input.app.versionName} (${input.app.versionCode}), profile ${input.profileId ?: "unknown"}, image ${input.imageId ?: "unknown"}")
             append(if (input.dryRun) ", dry run\n" else "\n")
+            if (ran != null && ran != input.app.versionCode) {
+                append("Session ran on app build $ran (stage/current.json); build ${input.app.versionCode} collected these logs\n")
+            }
             append("Outcome: ${input.outcome.title}\n${input.outcome.detail(Images.systemName(input.imageId?.let { Images.byId(it) }))}\n")
             append("Boot reason: ${input.outcome.bootReason ?: "unknown"}\n")
             if (input.incomplete.isNotEmpty()) append("Not collected: ${input.incomplete.joinToString(", ")}\n")
@@ -388,6 +410,7 @@ object LogBundle {
             "sessionId" to input.sessionId,
             "generatedAt" to input.generatedAt,
             "app" to linkedMapOf("id" to input.app.id, "version" to input.app.versionName, "versionCode" to input.app.versionCode),
+            "session" to linkedMapOf("versionCode" to ran),
             "profile" to input.profileId,
             "image" to input.imageId,
             "installdTableSha256" to input.tableSha256,

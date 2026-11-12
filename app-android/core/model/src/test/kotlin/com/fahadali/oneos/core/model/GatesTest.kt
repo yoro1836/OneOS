@@ -6,6 +6,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
 
 class GatesTest {
     private fun stage(
@@ -161,6 +162,102 @@ class GatesTest {
         assertEquals(Level.BLOCK, eval(GatePhase.SWITCH, good.copy(installd = InstalldDerivation.failed("x"))).level(SwitchGates.ID_INSTALLD))
     }
 
+    /**
+     * 0.4.85: with no system chosen, the phone's own Android version decides. One UI 8.5 phones with
+     * nothing set up read "One UI was updated" before (Android 17's installd table), also the Galaxy A56,
+     * whose systems are all Android 17 (the Android gate counted every image of the build).
+     */
+    @Test
+    fun oneUi85WithNoSystemChosen() {
+        val patches = File(System.getProperty("oneos.installdFixture") ?: "../../../switcher/patches/host_installd.txt").parentFile
+        val a16 = File(patches, "host_installd_a16.txt").readText()
+        val table = InstalldDerivation(InstalldTableFormat.parseLegacy(a16), "/system/framework/services.jar", "classes.dex", null, emptyList(), null)
+        fun bar(model: String, device: String, soc: SocProps) = Fixtures.facts(
+            model = model, device = device, soc = soc, oneUi = "80500", sdk = 36,
+            panels = listOf(Panel(0, "Built-in Screen", 1080, 2340, 400f, 400f)), hinge = false, inputs = listOf("hall", "sec_touchscreen"),
+        ).copy(androidRelease = "16")
+        val empty = StageState(emptyList(), emptyList(), false, null, false)
+        fun on(f: DeviceFacts, stage: StageState = empty) =
+            eval(GatePhase.SWITCH, GateInput(f, false, false, table, stage, expectedInstalldA16 = a16, appVersionCode = 4))
+
+        // Galaxy A15: OxygenOS 16 runs next to One UI 8.5. Nothing is refused; the image gate asks for a system.
+        val a15 = bar("SM-A155F", "a15", SocProps(manufacturer = "Mediatek", model = "MT6789"))
+        val nothing = on(a15)
+        assertEquals(Profiles.A15, nothing.profile)
+        assertNull(nothing.image)
+        assertEquals(Level.OK, nothing.level(SwitchGates.ID_ANDROID))
+        assertEquals(Level.OK, nothing.level(SwitchGates.ID_FORM))
+        assertEquals(Level.OK, nothing.level(SwitchGates.ID_INSTALLD))
+        assertEquals(SwitchGates.R_IMAGE_NOTHING, nothing.find(SwitchGates.ID_IMAGE)!!.finding.reason)
+        // A stage of another file set (after an app update): an Update, with the installd gate passing.
+        val oxygen = Profiles.A15.choices.first { Images.byId(it.imageId)!!.sdk == 36 }
+        val otherSet = on(a15, stage(Profiles.A15, oxygen.imageId, set = "set-of-an-older-build"))
+        assertNull(otherSet.image)
+        assertEquals(Level.OK, otherSet.level(SwitchGates.ID_INSTALLD))
+        assertEquals(SwitchGates.R_IMAGE_OTHER_SET, otherSet.find(SwitchGates.ID_IMAGE)!!.finding.reason)
+        // Staged and matching: the image decides, as before.
+        val staged = on(a15, stage(Profiles.A15, oxygen.imageId))
+        assertEquals(Images.byId(oxygen.imageId), staged.image)
+        assertEquals(listOf(Level.OK, Level.OK, Level.OK), listOf(SwitchGates.ID_ANDROID, SwitchGates.ID_INSTALLD, SwitchGates.ID_IMAGE).map { staged.level(it) })
+        // An Android 17 system staged on One UI 8.5 is still refused, with "choose another system".
+        val a17System = on(a15, stage(Profiles.A15))
+        assertEquals(37, a17System.image!!.sdk)
+        assertEquals(SwitchGates.R_ANDROID_DIFFERS, a17System.find(SwitchGates.ID_ANDROID)!!.finding.reason)
+        assertEquals(FixAction.CHOOSE_SYSTEM, Plain.of(a17System.find(SwitchGates.ID_ANDROID)!!.finding, a17System.image, Profiles.A15).action)
+
+        // 0.4.91 (owner: "add oxygenos to s23 series on oneui8/8.5"): the Galaxy S23s still on One UI 8/8.5 are no
+        // longer told to update One UI first; OxygenOS 16 is the system they can set up, their Android 17 ones are not.
+        val s23s = listOf(
+            Triple("SM-S911B", "dm1q", Profiles.S_8550), Triple("SM-S916U", "dm2q", Profiles.S_PLUS_8550),
+            Triple("SM-S918B", "dm3q", Profiles.S_ULTRA_8550),
+        )
+        for ((model, device, profile) in s23s) {
+            val f = bar(model, device, SocProps(manufacturer = "QTI", model = "SM8550"))
+            val s23 = on(f)
+            assertEquals(profile, s23.profile)
+            assertNull(model, s23.image)
+            assertEquals(model, Level.OK, s23.level(SwitchGates.ID_ANDROID))
+            assertEquals(model, Level.OK, s23.level(SwitchGates.ID_INSTALLD))
+            assertEquals(model, SwitchGates.R_IMAGE_NOTHING, s23.find(SwitchGates.ID_IMAGE)!!.finding.reason)
+            val s23Oxygen = on(f, stage(profile, Images.ID_OXYGEN16))
+            assertEquals(model, Images.OXYGEN16, s23Oxygen.image)
+            assertEquals(
+                model, listOf(Level.OK, Level.OK, Level.OK),
+                listOf(SwitchGates.ID_ANDROID, SwitchGates.ID_INSTALLD, SwitchGates.ID_IMAGE).map { s23Oxygen.level(it) },
+            )
+            val s23Color = on(f, stage(profile))
+            assertEquals(model, 37, s23Color.image!!.sdk)
+            assertEquals(model, SwitchGates.R_ANDROID_DIFFERS, s23Color.find(SwitchGates.ID_ANDROID)!!.finding.reason)
+        }
+
+        // Galaxy A56: every system is Android 17. "Update One UI first", and the installd gate has nothing to say.
+        val older = on(bar("SM-A566B", "a56x", SocProps(manufacturer = "Samsung", model = "s5e8855")))
+        assertEquals(Profiles.A56, older.profile)
+        val android = older.find(SwitchGates.ID_ANDROID)!!.finding
+        assertEquals(Level.BLOCK to SwitchGates.R_ANDROID_OLDER, android.level to android.reason)
+        assertTrue(android.detail, android.detail.contains("the systems for the Galaxy A56 are Android 17 (SDK 37)"))
+        assertEquals(Level.OK, older.level(SwitchGates.ID_INSTALLD))
+        val plain = Plain.of(android, null, Profiles.A56, PlainFacts(phoneAndroid = "16"))
+        assertEquals("Update One UI first", plain.title)
+        assertEquals("The systems for your Galaxy A56 need Android 17. Your phone has Android 16: update One UI, then open OneOS again.", plain.line)
+        assertEquals(FixAction.NONE, plain.action)
+        assertEquals("The systems for your Galaxy A56 need Android 17: update One UI, then open OneOS again.", Plain.of(android, null, Profiles.A56).line)
+        // The longest phone name keeps the line within its limit.
+        for (p in Profiles.BUILT_IN) {
+            val line = Plain.of(android, null, p, PlainFacts(phoneAndroid = "16")).line
+            assertTrue("${p.id}: ${line.length}", line.length <= PlainMessage.MAX_LINE)
+        }
+
+        // One UI 9 with nothing set up: Android 17's table, as before.
+        val f8u = eval(GatePhase.SWITCH, input(Bundles.F8U, image = null))
+        assertNull(f8u.image)
+        assertEquals(Level.OK, f8u.level(SwitchGates.ID_ANDROID))
+        assertEquals(Level.OK, f8u.level(SwitchGates.ID_INSTALLD))
+        // A One UI 9 phone whose table is unknown is still "One UI was updated" with nothing set up.
+        val unknown = eval(GatePhase.SWITCH, input(Bundles.F8U, image = null).copy(installd = table))
+        assertEquals(Level.BLOCK, unknown.level(SwitchGates.ID_INSTALLD))
+    }
+
     @Test
     fun androidVersionAndFormBlock() {
         val sdk36 = input(Bundles.S26U).let { it.copy(facts = it.facts.copy(sdk = 36, androidRelease = "16")) }
@@ -182,8 +279,8 @@ class GatesTest {
         val exynos = profileGate(Fixtures.facts(model = "SM-S948B", device = "m3s", soc = SocProps(manufacturer = "Samsung", model = "s5e9955")))
         assertEquals(Level.BLOCK, exynos.level(SwitchGates.ID_PROFILE))
         assertNull(exynos.profile)
-        // Galaxy S22: no profile (the S23 Ultra has one since 0.4.40).
-        val s22 = profileGate(Fixtures.facts(model = "SM-S901E", device = "r0q", soc = SocProps(manufacturer = "QTI", model = "SM8450")))
+        // Galaxy S21: no profile (the S23 Ultra has one since 0.4.40, the S22 with Snapdragon since 0.4.68).
+        val s22 = profileGate(Fixtures.facts(model = "SM-G991U", device = "o1q", soc = SocProps(manufacturer = "QTI", model = "SM8350")))
         assertEquals(Level.BLOCK, s22.level(SwitchGates.ID_PROFILE))
         assertTrue(s22.find(SwitchGates.ID_PROFILE)!!.finding.detail.contains("Galaxy S26 Ultra (SM-S948* / m3q / SM8850)"))
         val wrongCodename = profileGate(Fixtures.s26Ultra().copy(device = "pa3q"))
@@ -309,6 +406,17 @@ class GatesTest {
     }
 
     @Test
+    fun oldZygiskNextWarns() {
+        val old = eval(GatePhase.SWITCH, input(Bundles.F8U).copy(zygiskNextVersionCode = 864))
+        assertEquals(Level.WARN, old.level(SwitchGates.ID_ZYGISK))
+        assertEquals(SwitchGates.R_ZYGISK_OLD, old.find(SwitchGates.ID_ZYGISK)!!.finding.reason)
+        assertTrue(old.allows(emptySet()))
+        assertNull(eval(GatePhase.SWITCH, input(Bundles.F8U).copy(zygiskNextVersionCode = 880)).find(SwitchGates.ID_ZYGISK))
+        assertNull(eval(GatePhase.SWITCH, input(Bundles.F8U)).find(SwitchGates.ID_ZYGISK))
+        assertNull(eval(GatePhase.PREPARE, input(Bundles.F8U).copy(zygiskNextVersionCode = 864)).find(SwitchGates.ID_ZYGISK))
+    }
+
+    @Test
     fun everyGateFailsClosedWithNothingKnown() {
         val f = Bundles.S26U.facts.copy(root = RootSignals(), storage = null, battery = null, carrier = null)
         val r = SwitchGates.evaluate(GatePhase.SWITCH, GateInput(f, null, null, null, null))
@@ -404,7 +512,7 @@ class GatesTest {
         assertFalse(prepare.blocked)
         assertEquals(Level.WARN, prepare.level(SwitchGates.ID_PROFILE))
         assertEquals("First sessions of the Pixel 11 Fold image", prepare.find(SwitchGates.ID_PROFILE)!!.finding.title)
-        assertTrue(prepare.find(SwitchGates.ID_PROFILE)!!.finding.detail.contains("with Find N6, not yet with this image"))
+        assertTrue(prepare.find(SwitchGates.ID_PROFILE)!!.finding.detail.contains("with Find N6 and OriginOS 7, not yet with this image"))
         assertTrue(prepare.toTick.isEmpty())
 
         val r = SwitchGates.evaluate(GatePhase.SWITCH, i, profiles)
@@ -430,7 +538,7 @@ class GatesTest {
             // 0.4.22: the SM8750 phones the Pixel 9 Pro XL image (no SVE needed).
             val usual = listOf(Images.FIND_X9U_IN)
             // 0.4.27: Infinity-X, on every phone; 0.4.31: HyperOS after it; then Nothing OS.
-            val last = listOf(Images.NOTHING_METROID) // 0.4.35 the S26 Ultra, 0.4.36 the S25s too
+            val last = listOf(Images.NOTHING_METROID, Images.ORIGINOS7) // 0.4.35 the S26 Ultra, 0.4.36 the S25s too; 0.4.73 OriginOS 7
             assertEquals(
                 usual + (if (p == Profiles.S_ULTRA_8850) Images.PIXEL_KODIAK else Images.PIXEL_KOMODO) + Images.INFINITYX + Images.HYPEROS_LHASA + last,
                 p.images(),

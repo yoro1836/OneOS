@@ -91,12 +91,22 @@ class CpuAndVerdictTest {
 
     @Test
     fun androidVersionOtherThan17Warns() {
-        val r = CompatEvaluator.evaluate(Fixtures.facts(sdk = 36))
+        // 0.4.67: Android 16 has an image (OxygenOS 16); Android 15 (SDK 35) has none.
+        // A phone without a profile is compared with every image of the build.
+        val noProfile = SocProps(manufacturer = "Samsung", model = "s5e9955")
+        val r = CompatEvaluator.evaluate(Fixtures.facts(model = "SM-S948B", device = "m3s", soc = noProfile, sdk = 35))
         val f = r.find(CompatEvaluator.ID_ANDROID_DIFFERS)!!
         assertEquals(Level.WARN, f.level)
-        assertEquals("Android version differs from the OneOS images (17); switching may not work", f.title)
-        assertEquals(Verdict.WARNING, r.verdict)
+        assertEquals("Android version differs from the OneOS images (16, 17); switching may not work", f.title)
         assertNull(r.find(CompatEvaluator.ID_ANDROID_MATCHES))
+        assertEquals(Level.OK, CompatEvaluator.evaluate(Fixtures.facts(model = "SM-S948B", device = "m3s", soc = noProfile, sdk = 36)).level(CompatEvaluator.ID_ANDROID_MATCHES))
+        // 0.4.85: a profiled phone with its own systems (the Z Fold8 Ultra's are all Android 17).
+        for (sdk in listOf(35, 36)) {
+            val fold = CompatEvaluator.evaluate(Fixtures.facts(sdk = sdk))
+            assertEquals("The systems for this phone need Android 17: update One UI first", fold.find(CompatEvaluator.ID_ANDROID_DIFFERS)!!.title)
+            assertEquals(Verdict.WARNING, fold.verdict)
+            assertNull(fold.find(CompatEvaluator.ID_ANDROID_MATCHES))
+        }
 
         val same = CompatEvaluator.evaluate(Fixtures.facts(sdk = 37))
         assertNull(same.find(CompatEvaluator.ID_ANDROID_DIFFERS))
