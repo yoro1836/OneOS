@@ -3923,7 +3923,10 @@ if [ "$RETURN_MAX" -gt 0 ]; then
                             timeout 10 logcat -d -s WindowLayoutComponentImpl 2>/dev/null | tail -n 3; } > \$D/largescreen.txt 2>&1
                           { grep -E 'missed frame count|usesDeviceComposition|composition=' \$D/surfaceflinger.txt | sed -e 's/^ *//' -e 's/layer=0x[0-9a-f]* //' | sort | uniq -c
                             echo \"composer rejections in the log: \$(timeout 10 logcat -d -b main -s SurfaceFlinger:E 2>/dev/null | grep -c -E 'executeCommands failed|presentOrValidate failed')\"
-                            grep -h -E 'HW overlays|GPU composition' $STAGE/data/takeover.log 2>/dev/null; } > \$D/composition.txt 2>&1
+                            grep -h -E 'HW overlays|GPU composition' $STAGE/data/takeover.log 2>/dev/null
+                            echo '== graphics props (guest)'; gx /system/bin/getprop | grep -E 'renderengine|surface_flinger|hwui|disableBlur|blur'
+                            echo '== RenderEngine and Vulkan in the log'; timeout 10 logcat -d -b main -s RenderEngine SurfaceFlinger 2>/dev/null | grep -i -E 'vulkan|skiavk|blur|fall|RenderEngine' | head -n 40; } > \$D/composition.txt 2>&1
+                          { echo '== crash buffer (last 300 lines)'; timeout 10 logcat -d -b crash -t 300 2>/dev/null; } > \$D/crashes.txt 2>&1
                           { for p in com.android.systemui com.google.android.apps.nexuslauncher com.android.settings; do echo \"== pm art dump \$p\"; gx /system/bin/pm art dump \$p 2>&1 | head -n 30; done
                             echo '== ArtService'; timeout 10 logcat -d -s ArtService 2>/dev/null | grep -m2 -A4 'Unexpected package-level'; } > \$D/dexopt.txt 2>&1
                           for p in com.google.android.apps.nexuslauncher com.android.settings; do echo \"== \$p\"; gx /system/bin/dumpsys gfxinfo \$p 2>&1 | grep -E 'Total frames|Janky|percentile'; done > \$D/frames.txt 2>&1

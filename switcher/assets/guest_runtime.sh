@@ -186,8 +186,7 @@ verify-return)
     # The root manager's live grant table differs (Galaxy S24, KernelSU, every
     # session of 2026-11-12). The reboot this asked for costs a phone with
     # temporary root its root altogether, and the saved list on disk is still
-    # behind its read-only bind, so: say what changed and return in place; the
-    # bind stays until a reboot. Policy and kernel modules below still decide.
+    # behind its read-only bind, so: say what changed and return in place. Policy and kernel modules below still decide.
     # $STATE/strict_return brings the reboot back.
     GC=0
     if ! cmp -s "$B/root" "$B/return.root"; then
@@ -208,13 +207,36 @@ verify-return)
             kill -CONT "$pid" || exit 1
         done < "$B/host-frameworks"
     fi
-    if [ "$GC" = 1 ]; then
-        echo 'Guest runtime: SELinux policy and kernel modules match baseline; returning in place with the changed grants (the saved grant list stays protected until a reboot; grant again in the root manager if an app lost root)'
-        exit 0
-    fi
+    # The bind comes off in both cases: left on, the in-place return took it for
+    # a stage mount and rebooted (S24 237264f5: "FAILSAFE: stage still mounted:
+    # .../allowlist.saved /data/adb/ksu/.allowlist").
     if [ -f "$B/allowlist.protected" ]; then
         umount /data/adb/ksu/.allowlist || exit 1
         rm -f "$B/allowlist.protected"
+    fi
+    if [ "$GC" = 1 ]; then
+        # S24 237264f5: the manager went to 4294967295 and the grants to the shell's
+        # alone (the root provider checked its list against the guest's
+        # packages.list). It checks again whenever a packages.list is renamed
+        # into place, so One UI's own list is put in place once more, the same
+        # bytes, owner, mode and label, while One UI's system_server is down: the
+        # manager app is found again. Grants it dropped are not back by this.
+        PLF=${ONEOS_PKG_LIST:-/data/system/packages.list}
+        if [ -f "$PLF" ] && [ ! -L "$PLF" ]; then
+            T=$PLF.oneos
+            rm -f "$T"
+            if cp -p "$PLF" "$T" 2>/dev/null && { chcon "$(stat -c %C "$PLF" 2>/dev/null)" "$T" 2>/dev/null || true; } &&
+               cmp -s "$PLF" "$T" && [ "$(stat -c %u:%g:%a:%C "$PLF" 2>/dev/null)" = "$(stat -c %u:%g:%a:%C "$T" 2>/dev/null)" ] &&
+               mv -f "$T" "$PLF"; then
+                sleep 1
+                echo "Guest runtime: One UI's packages.list put in place again; root provider now: $("$S/guest_root" --host-audit 2>/dev/null | sort | tr '\n' ';' | head -c 1500)"
+            else
+                rm -f "$T"
+                echo "Guest runtime: One UI's packages.list left as it is (no exact copy could be made)"
+            fi
+        fi
+        echo 'Guest runtime: SELinux policy and kernel modules match baseline; returning in place with the changed grants (grant again in the root manager if an app lost root)'
+        exit 0
     fi
     echo 'Guest runtime: live host grants, manager, SELinux policy and kernel modules match baseline'
     ;;

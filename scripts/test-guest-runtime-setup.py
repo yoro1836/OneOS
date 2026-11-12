@@ -68,13 +68,16 @@ class PrivateBindTest(unittest.TestCase):
    if not policy_ok:pol.write_text('q')
    mods=subprocess.run("awk '{print $1, $2, $6}' /proc/modules | sort",shell=True,capture_output=True,text=True).stdout
    (B/'kernel-modules').write_text(mods)
-   r=subprocess.run(['sh',str(ROOT/'switcher/assets/guest_runtime.sh'),'verify-return'],env={**os.environ,'STAGE':d},capture_output=True,text=True)
+   pl=S/'packages.list';pl.write_text('a 10001\n');pl.chmod(0o640);ino=pl.stat().st_ino
+   r=subprocess.run(['sh',str(ROOT/'switcher/assets/guest_runtime.sh'),'verify-return'],env={**os.environ,'STAGE':d,'ONEOS_PKG_LIST':str(pl)},capture_output=True,text=True)
+   self.assertEqual(('a 10001\n',0o640),(pl.read_text(),pl.stat().st_mode&0o777));self.assertFalse((S/'packages.list.oneos').exists())
+   self.renamed=pl.stat().st_ino!=ino
    return r.returncode,r.stdout
  def test_matching_grants_return_in_place(self):
-  rc,out=self.run_return(True);self.assertEqual(0,rc,out);self.assertIn('match baseline',out);self.assertNotIn('changed',out)
+  rc,out=self.run_return(True);self.assertEqual(0,rc,out);self.assertIn('match baseline',out);self.assertNotIn('changed',out);self.assertFalse(self.renamed)
  def test_changed_grants_are_said_and_still_return_in_place(self):
   rc,out=self.run_return(False);self.assertEqual(0,rc,out)
-  self.assertIn('at the switch: allow 10300 unmount=0;manager 10250;',out);self.assertIn('at the return: manager 10250;',out);self.assertIn('returning in place',out)
+  self.assertIn('at the switch: allow 10300 unmount=0;manager 10250;',out);self.assertIn('at the return: manager 10250;',out);self.assertIn('returning in place',out);self.assertTrue(self.renamed);self.assertIn('put in place again; root provider now: manager 10250;',out)
  def test_strict_return_and_a_changed_policy_still_reboot(self):
   self.assertEqual(1,self.run_return(False,strict=True)[0]);self.assertEqual(1,self.run_return(False,policy_ok=False)[0])
 if __name__=='__main__': unittest.main()
