@@ -1113,13 +1113,23 @@ if [ -f /data/guest_audio.flag ]; then
         # 7, 23 and 27 minutes, the fifth handed over to Samsung audioserver, whose
         # product strategies carry Samsung usage 1005; a Pixel AudioService throws
         # Invalid usage 1005 and system_server died).
-        miss=0; r=0; last=0
+        miss=0; r=0; last=0; dn=0
         while [ -f /data/guest_audio.flag ]; do
             sleep 3
             if ! kill -0 $as 2>/dev/null; then why="died"
             elif [ "$(owner)" != "$as" ]; then why="media.audio_policy taken"
             else miss=0; continue; fi
             miss=$((miss + 1)); [ $miss -lt 2 ] && continue
+            # Why, for the first three of a session (S24 Pixel, 11-12: taken 12 s
+            # after it registered, then dead within 4 s of every start, and
+            # nothing in the report said by what). The owner as read, One UI
+            # audioserver as init has it, and the log lines of the last 20 s.
+            if [ $dn -lt 3 ]; then
+                dn=$((dn + 1))
+                echo "$(date +%T) diag $dn: $why; owner read as [$(owner)] (ours $as); init.svc.audioserver=$(getprop init.svc.audioserver) vendor.audio-hal=$(getprop init.svc.vendor.audio-hal); audioserver pids: $(pidof audioserver | tr "\n" " ")"
+                for dp in $(pidof audioserver); do echo "  $dp: $(readlink /proc/$dp/exe) started $(stat -c %y /proc/$dp 2>/dev/null | cut -c12-19) mnt $(readlink /proc/$dp/ns/mnt)"; done
+                logcat -d -b main,system,crash -t 4000 2>/dev/null | grep -i -E "audioserver|AudioFlinger|AudioPolicy|APM_|audio_hw|AudioSystem|DeviceHalAidl|DevicesFactoryHal|DEBUG   :|libc    : Fatal|ServiceManager.*audio|servicemanager.*audio|init    : .*audio" | grep -v -E "AudioService|AS\.AudioService" | tail -n 120 | cut -c1-300 | sed "s/^/  /"
+            fi
             kill -9 $as 2>/dev/null
             now=$(date +%s); [ $((now - last)) -gt 120 ] && r=0; last=$now
             # 0.4.60: no hand-over after registration. Every guest framework is not
