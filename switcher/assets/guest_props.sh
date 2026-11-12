@@ -1279,6 +1279,14 @@ add)
             ro.config.isolated_compilation_enabled|qemu.hw.mainkeys|ro.arm64.memtag.bootctl_*)
                 held=$((held + 1)); heldn="$heldn $k"; continue ;;
         esac
+        # A ro. one set through setprop cannot be blanked at the return and
+        # stays for One UI until the phone restarts (fp-9: about 30 of the
+        # Pixel's, the surfaceflinger offsets among them). Only this port's
+        # own go in; ONEOS_GUEST_PROPS_RO=1 lets the image's in too.
+        case "$k" in
+            ro.oneos.*|ro.surface_flinger.supports_background_blur) ;;
+            ro.*) [ "${ONEOS_GUEST_PROPS_RO:-0}" = 1 ] || { held=$((held + 1)); heldn="$heldn $k"; continue; } ;;
+        esac
         case " ${ONEOS_GUEST_PROPS_HOLD:-} " in *" $k "*) held=$((held + 1)); heldn="$heldn $k"; continue ;; esac
         echo "$line" >> "$STAGE/data/oneos_props_want" 2>/dev/null; left=$((left + 1))
     done < "$NEW"
