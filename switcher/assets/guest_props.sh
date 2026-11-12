@@ -1248,7 +1248,10 @@ add)
     # service before the guest's first process, the way that brought the blur
     # property back. Not from here: a persist. property set now would land in
     # One UI's own store, which is put aside only after this.
-    fixed=0; left=0
+    # Only the few this port needs go there. All 119 at once (2c01e30e) took
+    # the guest's zygote down inside a minute, and qemu.hw.mainkeys among them
+    # cannot be taken back at the return, which then restarts the phone.
+    fixed=0; left=0; held=0
     rm -f "$STAGE/data/oneos_props_want"
     while IFS= read -r line; do
         k=${line%%=*}; v=${line#*=}
@@ -1256,9 +1259,13 @@ add)
         [ "$(getprop "$k")" = "$v" ] && continue
         "$RP" -n "$k" "$v" 2>/dev/null
         if [ "$(getprop "$k")" = "$v" ]; then fixed=$((fixed + 1)); continue; fi
+        case "$k" in
+            persist.dbg.volte_avail_ovr|ro.surface_flinger.supports_background_blur|ro.oneos.*) ;;
+            *) held=$((held + 1)); continue ;;
+        esac
         echo "$line" >> "$STAGE/data/oneos_props_want" 2>/dev/null; left=$((left + 1))
     done < "$NEW"
-    [ $((fixed + left)) = 0 ] || echo "guest_props: after the batch $fixed props were set one by one; $left are still missing and left to the guest's start (data/oneos_props_want)"
+    [ $((fixed + left + held)) = 0 ] || echo "guest_props: after the batch $fixed props were set one by one; $left are still missing and left to the guest's start (data/oneos_props_want); $held more are missing and stay so"
     echo "guest_props add: batch done $(date +%T)"
     echo "guest_props: added $(wc -l < "$ADDED") props from the guest's build.prop files"
     rm -f "$HOST" "$NEW"
