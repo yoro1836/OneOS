@@ -1,6 +1,8 @@
 firmware/
 out/
 build/
+# Local debug package override (oneos.testPackagesDir); release builds use the checked-in packages/ pins.
+app-android/pk-lock/
 *.raw
 *.img
 *.img.gz
