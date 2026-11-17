@@ -27,7 +27,13 @@
           "image": "infinityx41-findx9u",
           "label": "Infinity-X 4.1, Find X9 Ultra build",
           "set": "infinityx",
-          "tested": false
+          "tested": true
+        },
+        {
+          "image": "lineage24-infiniti",
+          "label": "LineageOS 24, OnePlus 15 build",
+          "set": "lineage",
+          "tested": true
         },
         {
           "image": "hyperos-lhasa",
@@ -39,7 +45,7 @@
           "image": "nothingos5-metroid",
           "label": "Nothing OS 5.0, Metroid build",
           "set": "nothing-f8u",
-          "tested": false
+          "tested": true
         },
         {
           "image": "originos7-pd2609ma",
@@ -60,9 +66,9 @@
       "disabledReason": null,
       "systems": [
         {
-          "image": "coloros17-findx9u-in",
-          "label": "ColorOS 17, Find X9 Ultra IN build",
-          "set": "x9u-in-sultra",
+          "image": "coloros17-findx9u-in-1105",
+          "label": "ColorOS 17, Find X9 Ultra IN build (November update)",
+          "set": "x9u-in-1105-sultra",
           "tested": true
         },
         {
@@ -76,6 +82,12 @@
           "label": "Infinity-X 4.1, Find X9 Ultra build",
           "set": "infinityx",
           "tested": true
+        },
+        {
+          "image": "lineage24-infiniti",
+          "label": "LineageOS 24, OnePlus 15 build",
+          "set": "lineage",
+          "tested": false
         },
         {
           "image": "hyperos-lhasa",
@@ -108,9 +120,9 @@
       "disabledReason": null,
       "systems": [
         {
-          "image": "coloros17-findx9u-in",
-          "label": "ColorOS 17, Find X9 Ultra IN build",
-          "set": "x9u-in-sultra",
+          "image": "coloros17-findx9u-in-1105",
+          "label": "ColorOS 17, Find X9 Ultra IN build (November update)",
+          "set": "x9u-in-1105-sultra",
           "tested": true
         },
         {
@@ -124,6 +136,12 @@
           "label": "Infinity-X 4.1, Find X9 Ultra build",
           "set": "infinityx",
           "tested": true
+        },
+        {
+          "image": "lineage24-infiniti",
+          "label": "LineageOS 24, OnePlus 15 build",
+          "set": "lineage",
+          "tested": false
         },
         {
           "image": "hyperos-lhasa",
@@ -156,9 +174,9 @@
       "disabledReason": null,
       "systems": [
         {
-          "image": "coloros17-findx9u-in",
-          "label": "ColorOS 17, Find X9 Ultra IN build",
-          "set": "x9u-in-sultra",
+          "image": "coloros17-findx9u-in-1105",
+          "label": "ColorOS 17, Find X9 Ultra IN build (November update)",
+          "set": "x9u-in-1105-sultra",
           "tested": true
         },
         {
@@ -172,6 +190,12 @@
           "label": "Infinity-X 4.1, Find X9 Ultra build",
           "set": "infinityx",
           "tested": true
+        },
+        {
+          "image": "lineage24-infiniti",
+          "label": "LineageOS 24, OnePlus 15 build",
+          "set": "lineage",
+          "tested": false
         },
         {
           "image": "hyperos-lhasa",
@@ -216,6 +240,12 @@
           "tested": false
         },
         {
+          "image": "lineage24-infiniti",
+          "label": "LineageOS 24, OnePlus 15 build",
+          "set": "lineage",
+          "tested": false
+        },
+        {
           "image": "hyperos-lhasa",
           "label": "HyperOS, Xiaomi 18 Fold build",
           "set": "hyper-f8u",
@@ -246,9 +276,9 @@
       "disabledReason": null,
       "systems": [
         {
-          "image": "coloros17-findx9u-in",
-          "label": "ColorOS 17, Find X9 Ultra IN build",
-          "set": "x9u-in-sultra",
+          "image": "coloros17-findx9u-in-1105",
+          "label": "ColorOS 17, Find X9 Ultra IN build (November update)",
+          "set": "x9u-in-1105-sultra",
           "tested": false
         },
         {
@@ -261,6 +291,12 @@
           "image": "infinityx41-findx9u",
           "label": "Infinity-X 4.1, Find X9 Ultra build",
           "set": "infinityx",
+          "tested": false
+        },
+        {
+          "image": "lineage24-infiniti",
+          "label": "LineageOS 24, OnePlus 15 build",
+          "set": "lineage",
           "tested": false
         },
         {
@@ -312,6 +348,12 @@
           "tested": false
         },
         {
+          "image": "lineage24-infiniti",
+          "label": "LineageOS 24, OnePlus 15 build",
+          "set": "lineage",
+          "tested": false
+        },
+        {
           "image": "hyperos-lhasa",
           "label": "HyperOS, Xiaomi 18 Fold build",
           "set": "hyper-f8u",
@@ -342,9 +384,9 @@
       "disabledReason": null,
       "systems": [
         {
-          "image": "coloros17-findx9u-in",
-          "label": "ColorOS 17, Find X9 Ultra IN build",
-          "set": "x9u-in-sultra",
+          "image": "coloros17-findx9u-in-1105",
+          "label": "ColorOS 17, Find X9 Ultra IN build (November update)",
+          "set": "x9u-in-1105-sultra",
           "tested": false
         },
         {
@@ -357,6 +399,12 @@
           "image": "infinityx41-findx9u",
           "label": "Infinity-X 4.1, Find X9 Ultra build",
           "set": "infinityx",
+          "tested": false
+        },
+        {
+          "image": "lineage24-infiniti",
+          "label": "LineageOS 24, OnePlus 15 build",
+          "set": "lineage",
           "tested": false
         },
         {
@@ -390,9 +438,9 @@
       "disabledReason": null,
       "systems": [
         {
-          "image": "coloros17-findx9u-in",
-          "label": "ColorOS 17, Find X9 Ultra IN build",
-          "set": "x9u-in-sultra",
+          "image": "coloros17-findx9u-in-1105",
+          "label": "ColorOS 17, Find X9 Ultra IN build (November update)",
+          "set": "x9u-in-1105-sultra",
           "tested": false
         },
         {
@@ -405,6 +453,12 @@
           "image": "infinityx41-findx9u",
           "label": "Infinity-X 4.1, Find X9 Ultra build",
           "set": "infinityx",
+          "tested": false
+        },
+        {
+          "image": "lineage24-infiniti",
+          "label": "LineageOS 24, OnePlus 15 build",
+          "set": "lineage",
           "tested": false
         },
         {
@@ -438,9 +492,9 @@
       "disabledReason": null,
       "systems": [
         {
-          "image": "coloros17-findx9u-in",
-          "label": "ColorOS 17, Find X9 Ultra IN build",
-          "set": "x9u-in-sultra",
+          "image": "coloros17-findx9u-in-1105",
+          "label": "ColorOS 17, Find X9 Ultra IN build (November update)",
+          "set": "x9u-in-1105-sultra",
           "tested": false
         },
         {
@@ -454,6 +508,12 @@
           "label": "Infinity-X 4.1, Find X9 Ultra build",
           "set": "infinityx",
           "tested": true
+        },
+        {
+          "image": "lineage24-infiniti",
+          "label": "LineageOS 24, OnePlus 15 build",
+          "set": "lineage",
+          "tested": false
         },
         {
           "image": "hyperos-lhasa",
@@ -486,9 +546,9 @@
       "disabledReason": null,
       "systems": [
         {
-          "image": "coloros17-findx9u-in",
-          "label": "ColorOS 17, Find X9 Ultra IN build",
-          "set": "x9u-in-sultra",
+          "image": "coloros17-findx9u-in-1105",
+          "label": "ColorOS 17, Find X9 Ultra IN build (November update)",
+          "set": "x9u-in-1105-sultra",
           "tested": false
         },
         {
@@ -501,6 +561,12 @@
           "image": "infinityx41-findx9u",
           "label": "Infinity-X 4.1, Find X9 Ultra build",
           "set": "infinityx",
+          "tested": false
+        },
+        {
+          "image": "lineage24-infiniti",
+          "label": "LineageOS 24, OnePlus 15 build",
+          "set": "lineage",
           "tested": false
         },
         {
@@ -534,9 +600,9 @@
       "disabledReason": null,
       "systems": [
         {
-          "image": "coloros17-findx9u-in",
-          "label": "ColorOS 17, Find X9 Ultra IN build",
-          "set": "x9u-in-sultra",
+          "image": "coloros17-findx9u-in-1105",
+          "label": "ColorOS 17, Find X9 Ultra IN build (November update)",
+          "set": "x9u-in-1105-sultra",
           "tested": false
         },
         {
@@ -552,6 +618,12 @@
           "tested": false
         },
         {
+          "image": "lineage24-infiniti",
+          "label": "LineageOS 24, OnePlus 15 build",
+          "set": "lineage",
+          "tested": false
+        },
+        {
           "image": "hyperos-lhasa",
           "label": "HyperOS, Xiaomi 18 Fold build",
           "set": "hyper-f8u",
@@ -561,6 +633,12 @@
           "image": "oxygenos16-cph2745",
           "label": "OxygenOS 16, OnePlus CPH2745 build",
           "set": "oxygen16",
+          "tested": false
+        },
+        {
+          "image": "nothingos5-metroid",
+          "label": "Nothing OS 5.0, Metroid build",
+          "set": "nothing-f8u",
           "tested": false
         },
         {
@@ -582,9 +660,9 @@
       "disabledReason": null,
       "systems": [
         {
-          "image": "coloros17-findx9u-in",
-          "label": "ColorOS 17, Find X9 Ultra IN build",
-          "set": "x9u-in-sultra",
+          "image": "coloros17-findx9u-in-1105",
+          "label": "ColorOS 17, Find X9 Ultra IN build (November update)",
+          "set": "x9u-in-1105-sultra",
           "tested": false
         },
         {
@@ -600,6 +678,12 @@
           "tested": false
         },
         {
+          "image": "lineage24-infiniti",
+          "label": "LineageOS 24, OnePlus 15 build",
+          "set": "lineage",
+          "tested": false
+        },
+        {
           "image": "hyperos-lhasa",
           "label": "HyperOS, Xiaomi 18 Fold build",
           "set": "hyper-f8u",
@@ -609,6 +693,12 @@
           "image": "oxygenos16-cph2745",
           "label": "OxygenOS 16, OnePlus CPH2745 build",
           "set": "oxygen16",
+          "tested": false
+        },
+        {
+          "image": "nothingos5-metroid",
+          "label": "Nothing OS 5.0, Metroid build",
+          "set": "nothing-f8u",
           "tested": false
         },
         {
@@ -630,9 +720,9 @@
       "disabledReason": null,
       "systems": [
         {
-          "image": "coloros17-findx9u-in",
-          "label": "ColorOS 17, Find X9 Ultra IN build",
-          "set": "x9u-in-sultra",
+          "image": "coloros17-findx9u-in-1105",
+          "label": "ColorOS 17, Find X9 Ultra IN build (November update)",
+          "set": "x9u-in-1105-sultra",
           "tested": false
         },
         {
@@ -645,6 +735,12 @@
           "image": "infinityx41-findx9u",
           "label": "Infinity-X 4.1, Find X9 Ultra build",
           "set": "infinityx",
+          "tested": false
+        },
+        {
+          "image": "lineage24-infiniti",
+          "label": "LineageOS 24, OnePlus 15 build",
+          "set": "lineage",
           "tested": false
         },
         {
@@ -678,9 +774,9 @@
       "disabledReason": null,
       "systems": [
         {
-          "image": "coloros17-findx9u-in",
-          "label": "ColorOS 17, Find X9 Ultra IN build",
-          "set": "x9u-in-sultra",
+          "image": "coloros17-findx9u-in-1105",
+          "label": "ColorOS 17, Find X9 Ultra IN build (November update)",
+          "set": "x9u-in-1105-sultra",
           "tested": false
         },
         {
@@ -693,6 +789,12 @@
           "image": "infinityx41-findx9u",
           "label": "Infinity-X 4.1, Find X9 Ultra build",
           "set": "infinityx",
+          "tested": false
+        },
+        {
+          "image": "lineage24-infiniti",
+          "label": "LineageOS 24, OnePlus 15 build",
+          "set": "lineage",
           "tested": false
         },
         {
@@ -720,9 +822,9 @@
       "disabledReason": null,
       "systems": [
         {
-          "image": "coloros17-findx9u-in",
-          "label": "ColorOS 17, Find X9 Ultra IN build",
-          "set": "x9u-in-sultra",
+          "image": "coloros17-findx9u-in-1105",
+          "label": "ColorOS 17, Find X9 Ultra IN build (November update)",
+          "set": "x9u-in-1105-sultra",
           "tested": false
         },
         {
@@ -735,6 +837,12 @@
           "image": "infinityx41-findx9u",
           "label": "Infinity-X 4.1, Find X9 Ultra build",
           "set": "infinityx",
+          "tested": false
+        },
+        {
+          "image": "lineage24-infiniti",
+          "label": "LineageOS 24, OnePlus 15 build",
+          "set": "lineage",
           "tested": false
         },
         {
@@ -756,9 +864,9 @@
       "disabledReason": null,
       "systems": [
         {
-          "image": "coloros17-findx9u-in",
-          "label": "ColorOS 17, Find X9 Ultra IN build",
-          "set": "x9u-in-sultra",
+          "image": "coloros17-findx9u-in-1105",
+          "label": "ColorOS 17, Find X9 Ultra IN build (November update)",
+          "set": "x9u-in-1105-sultra",
           "tested": false
         },
         {
@@ -774,9 +882,21 @@
           "tested": false
         },
         {
+          "image": "lineage24-infiniti",
+          "label": "LineageOS 24, OnePlus 15 build",
+          "set": "lineage",
+          "tested": false
+        },
+        {
           "image": "hyperos-lhasa",
           "label": "HyperOS, Xiaomi 18 Fold build",
           "set": "hyper-f8u",
+          "tested": false
+        },
+        {
+          "image": "nothingos5-asteroids",
+          "label": "Nothing OS 5.0, A series build",
+          "set": "nothing-a",
           "tested": false
         }
       ]
@@ -792,9 +912,9 @@
       "disabledReason": null,
       "systems": [
         {
-          "image": "coloros17-findx9u-in",
-          "label": "ColorOS 17, Find X9 Ultra IN build",
-          "set": "x9u-in-sultra",
+          "image": "coloros17-findx9u-in-1105",
+          "label": "ColorOS 17, Find X9 Ultra IN build (November update)",
+          "set": "x9u-in-1105-sultra",
           "tested": true
         },
         {
@@ -810,9 +930,21 @@
           "tested": false
         },
         {
+          "image": "lineage24-infiniti",
+          "label": "LineageOS 24, OnePlus 15 build",
+          "set": "lineage",
+          "tested": false
+        },
+        {
           "image": "hyperos-lhasa",
           "label": "HyperOS, Xiaomi 18 Fold build",
           "set": "hyper-f8u",
+          "tested": false
+        },
+        {
+          "image": "nothingos5-asteroids",
+          "label": "Nothing OS 5.0, A series build",
+          "set": "nothing-a",
           "tested": false
         }
       ]
@@ -828,9 +960,9 @@
       "disabledReason": null,
       "systems": [
         {
-          "image": "coloros17-findx9u-in",
-          "label": "ColorOS 17, Find X9 Ultra IN build",
-          "set": "x9u-in-sultra",
+          "image": "coloros17-findx9u-in-1105",
+          "label": "ColorOS 17, Find X9 Ultra IN build (November update)",
+          "set": "x9u-in-1105-sultra",
           "tested": true
         },
         {
@@ -844,6 +976,12 @@
           "label": "Infinity-X 4.1, Find X9 Ultra build",
           "set": "infinityx",
           "tested": true
+        },
+        {
+          "image": "lineage24-infiniti",
+          "label": "LineageOS 24, OnePlus 15 build",
+          "set": "lineage",
+          "tested": false
         },
         {
           "image": "hyperos-lhasa",
@@ -876,6 +1014,12 @@
           "tested": false
         },
         {
+          "image": "lineage24-infiniti",
+          "label": "LineageOS 24, OnePlus 15 build",
+          "set": "lineage",
+          "tested": false
+        },
+        {
           "image": "nothingos5-metroid",
           "label": "Nothing OS 5.0, Metroid build",
           "set": "nothing-f8u",
@@ -894,9 +1038,9 @@
       "disabledReason": null,
       "systems": [
         {
-          "image": "coloros17-findx9u-in",
-          "label": "ColorOS 17, Find X9 Ultra IN build",
-          "set": "x9u-in-sultra",
+          "image": "coloros17-findx9u-in-1105",
+          "label": "ColorOS 17, Find X9 Ultra IN build (November update)",
+          "set": "x9u-in-1105-sultra",
           "tested": false
         },
         {
@@ -904,6 +1048,12 @@
           "label": "Infinity-X 4.1, Find X9 Ultra build",
           "set": "infinityx",
           "tested": true
+        },
+        {
+          "image": "lineage24-infiniti",
+          "label": "LineageOS 24, OnePlus 15 build",
+          "set": "lineage",
+          "tested": false
         },
         {
           "image": "hyperos-lhasa",
@@ -915,6 +1065,12 @@
           "image": "oxygenos16-cph2745",
           "label": "OxygenOS 16, OnePlus CPH2745 build",
           "set": "oxygen16",
+          "tested": false
+        },
+        {
+          "image": "nothingos5-asteroids",
+          "label": "Nothing OS 5.0, A series build",
+          "set": "nothing-a",
           "tested": false
         }
       ]
@@ -930,9 +1086,9 @@
       "disabledReason": null,
       "systems": [
         {
-          "image": "coloros17-findx9u-in",
-          "label": "ColorOS 17, Find X9 Ultra IN build",
-          "set": "x9u-in-sultra",
+          "image": "coloros17-findx9u-in-1105",
+          "label": "ColorOS 17, Find X9 Ultra IN build (November update)",
+          "set": "x9u-in-1105-sultra",
           "tested": false
         },
         {
@@ -945,6 +1101,12 @@
           "image": "infinityx41-findx9u",
           "label": "Infinity-X 4.1, Find X9 Ultra build",
           "set": "infinityx",
+          "tested": false
+        },
+        {
+          "image": "lineage24-infiniti",
+          "label": "LineageOS 24, OnePlus 15 build",
+          "set": "lineage",
           "tested": false
         },
         {
@@ -972,9 +1134,9 @@
       "disabledReason": null,
       "systems": [
         {
-          "image": "coloros17-findx9u-in",
-          "label": "ColorOS 17, Find X9 Ultra IN build",
-          "set": "x9u-in-sultra",
+          "image": "coloros17-findx9u-in-1105",
+          "label": "ColorOS 17, Find X9 Ultra IN build (November update)",
+          "set": "x9u-in-1105-sultra",
           "tested": false
         },
         {
@@ -984,9 +1146,21 @@
           "tested": false
         },
         {
+          "image": "lineage24-infiniti",
+          "label": "LineageOS 24, OnePlus 15 build",
+          "set": "lineage",
+          "tested": false
+        },
+        {
           "image": "hyperos-lhasa",
           "label": "HyperOS, Xiaomi 18 Fold build",
           "set": "hyper-f8u",
+          "tested": false
+        },
+        {
+          "image": "nothingos5-asteroids",
+          "label": "Nothing OS 5.0, A series build",
+          "set": "nothing-a",
           "tested": false
         }
       ]
@@ -1012,6 +1186,12 @@
           "label": "Infinity-X 4.1, Find X9 Ultra build",
           "set": "infinityx",
           "tested": false
+        },
+        {
+          "image": "lineage24-infiniti",
+          "label": "LineageOS 24, OnePlus 15 build",
+          "set": "lineage",
+          "tested": false
         }
       ]
     },
@@ -1026,9 +1206,9 @@
       "disabledReason": null,
       "systems": [
         {
-          "image": "coloros17-findx9u-in",
-          "label": "ColorOS 17, Find X9 Ultra IN build",
-          "set": "x9u-in-sultra",
+          "image": "coloros17-findx9u-in-1105",
+          "label": "ColorOS 17, Find X9 Ultra IN build (November update)",
+          "set": "x9u-in-1105-sultra",
           "tested": false
         },
         {
@@ -1044,6 +1224,12 @@
           "tested": false
         },
         {
+          "image": "lineage24-infiniti",
+          "label": "LineageOS 24, OnePlus 15 build",
+          "set": "lineage",
+          "tested": false
+        },
+        {
           "image": "hyperos-lhasa",
           "label": "HyperOS, Xiaomi 18 Fold build",
           "set": "hyper-f8u",
@@ -1053,6 +1239,12 @@
           "image": "oxygenos16-cph2745",
           "label": "OxygenOS 16, OnePlus CPH2745 build",
           "set": "oxygen16",
+          "tested": false
+        },
+        {
+          "image": "nothingos5-metroid",
+          "label": "Nothing OS 5.0, Metroid build",
+          "set": "nothing-f8u",
           "tested": false
         },
         {
@@ -1074,9 +1266,9 @@
       "disabledReason": null,
       "systems": [
         {
-          "image": "coloros17-findx9u-in",
-          "label": "ColorOS 17, Find X9 Ultra IN build",
-          "set": "x9u-in-sultra",
+          "image": "coloros17-findx9u-in-1105",
+          "label": "ColorOS 17, Find X9 Ultra IN build (November update)",
+          "set": "x9u-in-1105-sultra",
           "tested": false
         },
         {
@@ -1089,6 +1281,12 @@
           "image": "infinityx41-findx9u",
           "label": "Infinity-X 4.1, Find X9 Ultra build",
           "set": "infinityx",
+          "tested": false
+        },
+        {
+          "image": "lineage24-infiniti",
+          "label": "LineageOS 24, OnePlus 15 build",
+          "set": "lineage",
           "tested": false
         }
       ]
@@ -1104,9 +1302,9 @@
       "disabledReason": null,
       "systems": [
         {
-          "image": "coloros17-findx9u-in",
-          "label": "ColorOS 17, Find X9 Ultra IN build",
-          "set": "x9u-in-sultra",
+          "image": "coloros17-findx9u-in-1105",
+          "label": "ColorOS 17, Find X9 Ultra IN build (November update)",
+          "set": "x9u-in-1105-sultra",
           "tested": false
         },
         {
@@ -1119,6 +1317,12 @@
           "image": "infinityx41-findx9u",
           "label": "Infinity-X 4.1, Find X9 Ultra build",
           "set": "infinityx",
+          "tested": false
+        },
+        {
+          "image": "lineage24-infiniti",
+          "label": "LineageOS 24, OnePlus 15 build",
+          "set": "lineage",
           "tested": false
         },
         {
@@ -1152,9 +1356,9 @@
       "disabledReason": null,
       "systems": [
         {
-          "image": "coloros17-findx9u-in",
-          "label": "ColorOS 17, Find X9 Ultra IN build",
-          "set": "x9u-in-sultra",
+          "image": "coloros17-findx9u-in-1105",
+          "label": "ColorOS 17, Find X9 Ultra IN build (November update)",
+          "set": "x9u-in-1105-sultra",
           "tested": false
         },
         {
@@ -1167,6 +1371,12 @@
           "image": "infinityx41-findx9u",
           "label": "Infinity-X 4.1, Find X9 Ultra build",
           "set": "infinityx",
+          "tested": false
+        },
+        {
+          "image": "lineage24-infiniti",
+          "label": "LineageOS 24, OnePlus 15 build",
+          "set": "lineage",
           "tested": false
         },
         {
@@ -1200,9 +1410,9 @@
       "disabledReason": null,
       "systems": [
         {
-          "image": "coloros17-findx9u-in",
-          "label": "ColorOS 17, Find X9 Ultra IN build",
-          "set": "x9u-in-sultra",
+          "image": "coloros17-findx9u-in-1105",
+          "label": "ColorOS 17, Find X9 Ultra IN build (November update)",
+          "set": "x9u-in-1105-sultra",
           "tested": false
         },
         {
@@ -1215,6 +1425,12 @@
           "image": "infinityx41-findx9u",
           "label": "Infinity-X 4.1, Find X9 Ultra build",
           "set": "infinityx",
+          "tested": false
+        },
+        {
+          "image": "lineage24-infiniti",
+          "label": "LineageOS 24, OnePlus 15 build",
+          "set": "lineage",
           "tested": false
         },
         {
@@ -1236,15 +1452,21 @@
       "disabledReason": null,
       "systems": [
         {
-          "image": "coloros17-findx9u-in",
-          "label": "ColorOS 17, Find X9 Ultra IN build",
-          "set": "x9u-in-sultra",
+          "image": "coloros17-findx9u-in-1105",
+          "label": "ColorOS 17, Find X9 Ultra IN build (November update)",
+          "set": "x9u-in-1105-sultra",
           "tested": false
         },
         {
           "image": "infinityx41-findx9u",
           "label": "Infinity-X 4.1, Find X9 Ultra build",
           "set": "infinityx",
+          "tested": false
+        },
+        {
+          "image": "lineage24-infiniti",
+          "label": "LineageOS 24, OnePlus 15 build",
+          "set": "lineage",
           "tested": false
         },
         {
@@ -1257,6 +1479,12 @@
           "image": "oxygenos16-cph2745",
           "label": "OxygenOS 16, OnePlus CPH2745 build",
           "set": "oxygen16",
+          "tested": false
+        },
+        {
+          "image": "nothingos5-asteroids",
+          "label": "Nothing OS 5.0, A series build",
+          "set": "nothing-a",
           "tested": false
         }
       ]
@@ -1272,9 +1500,9 @@
       "disabledReason": null,
       "systems": [
         {
-          "image": "coloros17-findx9u-in",
-          "label": "ColorOS 17, Find X9 Ultra IN build",
-          "set": "x9u-in-sultra",
+          "image": "coloros17-findx9u-in-1105",
+          "label": "ColorOS 17, Find X9 Ultra IN build (November update)",
+          "set": "x9u-in-1105-sultra",
           "tested": false
         },
         {
@@ -1282,6 +1510,12 @@
           "label": "Infinity-X 4.1, Find X9 Ultra build",
           "set": "infinityx",
           "tested": true
+        },
+        {
+          "image": "lineage24-infiniti",
+          "label": "LineageOS 24, OnePlus 15 build",
+          "set": "lineage",
+          "tested": false
         },
         {
           "image": "hyperos-lhasa",
@@ -1293,6 +1527,12 @@
           "image": "oxygenos16-cph2745",
           "label": "OxygenOS 16, OnePlus CPH2745 build",
           "set": "oxygen16",
+          "tested": false
+        },
+        {
+          "image": "nothingos5-asteroids",
+          "label": "Nothing OS 5.0, A series build",
+          "set": "nothing-a",
           "tested": false
         }
       ]
@@ -1308,9 +1548,9 @@
       "disabledReason": null,
       "systems": [
         {
-          "image": "coloros17-findx9u-in",
-          "label": "ColorOS 17, Find X9 Ultra IN build",
-          "set": "x9u-in-sultra",
+          "image": "coloros17-findx9u-in-1105",
+          "label": "ColorOS 17, Find X9 Ultra IN build (November update)",
+          "set": "x9u-in-1105-sultra",
           "tested": false
         },
         {
@@ -1318,6 +1558,12 @@
           "label": "Infinity-X 4.1, Find X9 Ultra build",
           "set": "infinityx",
           "tested": true
+        },
+        {
+          "image": "lineage24-infiniti",
+          "label": "LineageOS 24, OnePlus 15 build",
+          "set": "lineage",
+          "tested": false
         },
         {
           "image": "hyperos-lhasa",
@@ -1329,6 +1575,12 @@
           "image": "oxygenos16-cph2745",
           "label": "OxygenOS 16, OnePlus CPH2745 build",
           "set": "oxygen16",
+          "tested": false
+        },
+        {
+          "image": "nothingos5-asteroids",
+          "label": "Nothing OS 5.0, A series build",
+          "set": "nothing-a",
           "tested": false
         }
       ]
@@ -1344,9 +1596,9 @@
       "disabledReason": null,
       "systems": [
         {
-          "image": "coloros17-findx9u-in",
-          "label": "ColorOS 17, Find X9 Ultra IN build",
-          "set": "x9u-in-sultra",
+          "image": "coloros17-findx9u-in-1105",
+          "label": "ColorOS 17, Find X9 Ultra IN build (November update)",
+          "set": "x9u-in-1105-sultra",
           "tested": false
         },
         {
@@ -1359,6 +1611,12 @@
           "image": "infinityx41-findx9u",
           "label": "Infinity-X 4.1, Find X9 Ultra build",
           "set": "infinityx",
+          "tested": false
+        },
+        {
+          "image": "lineage24-infiniti",
+          "label": "LineageOS 24, OnePlus 15 build",
+          "set": "lineage",
           "tested": false
         },
         {
@@ -1386,9 +1644,9 @@
       "disabledReason": null,
       "systems": [
         {
-          "image": "coloros17-findx9u-in",
-          "label": "ColorOS 17, Find X9 Ultra IN build",
-          "set": "x9u-in-sultra",
+          "image": "coloros17-findx9u-in-1105",
+          "label": "ColorOS 17, Find X9 Ultra IN build (November update)",
+          "set": "x9u-in-1105-sultra",
           "tested": false
         },
         {
@@ -1396,6 +1654,12 @@
           "label": "Infinity-X 4.1, Find X9 Ultra build",
           "set": "infinityx",
           "tested": true
+        },
+        {
+          "image": "lineage24-infiniti",
+          "label": "LineageOS 24, OnePlus 15 build",
+          "set": "lineage",
+          "tested": false
         },
         {
           "image": "hyperos-lhasa",
@@ -1407,6 +1671,12 @@
           "image": "oxygenos16-cph2745",
           "label": "OxygenOS 16, OnePlus CPH2745 build",
           "set": "oxygen16",
+          "tested": false
+        },
+        {
+          "image": "nothingos5-asteroids",
+          "label": "Nothing OS 5.0, A series build",
+          "set": "nothing-a",
           "tested": false
         }
       ]
@@ -1422,15 +1692,21 @@
       "disabledReason": null,
       "systems": [
         {
-          "image": "coloros17-findx9u-in",
-          "label": "ColorOS 17, Find X9 Ultra IN build",
-          "set": "x9u-in-sultra",
+          "image": "coloros17-findx9u-in-1105",
+          "label": "ColorOS 17, Find X9 Ultra IN build (November update)",
+          "set": "x9u-in-1105-sultra",
           "tested": false
         },
         {
           "image": "infinityx41-findx9u",
           "label": "Infinity-X 4.1, Find X9 Ultra build",
           "set": "infinityx",
+          "tested": false
+        },
+        {
+          "image": "lineage24-infiniti",
+          "label": "LineageOS 24, OnePlus 15 build",
+          "set": "lineage",
           "tested": false
         },
         {
@@ -1443,6 +1719,12 @@
           "image": "oxygenos16-cph2745",
           "label": "OxygenOS 16, OnePlus CPH2745 build",
           "set": "oxygen16",
+          "tested": false
+        },
+        {
+          "image": "nothingos5-asteroids",
+          "label": "Nothing OS 5.0, A series build",
+          "set": "nothing-a",
           "tested": false
         }
       ]
@@ -1458,15 +1740,21 @@
       "disabledReason": null,
       "systems": [
         {
-          "image": "coloros17-findx9u-in",
-          "label": "ColorOS 17, Find X9 Ultra IN build",
-          "set": "x9u-in-sultra",
+          "image": "coloros17-findx9u-in-1105",
+          "label": "ColorOS 17, Find X9 Ultra IN build (November update)",
+          "set": "x9u-in-1105-sultra",
           "tested": false
         },
         {
           "image": "infinityx41-findx9u",
           "label": "Infinity-X 4.1, Find X9 Ultra build",
           "set": "infinityx",
+          "tested": false
+        },
+        {
+          "image": "lineage24-infiniti",
+          "label": "LineageOS 24, OnePlus 15 build",
+          "set": "lineage",
           "tested": false
         },
         {
@@ -1479,6 +1767,12 @@
           "image": "oxygenos16-cph2745",
           "label": "OxygenOS 16, OnePlus CPH2745 build",
           "set": "oxygen16",
+          "tested": false
+        },
+        {
+          "image": "nothingos5-asteroids",
+          "label": "Nothing OS 5.0, A series build",
+          "set": "nothing-a",
           "tested": false
         }
       ]
@@ -1494,15 +1788,21 @@
       "disabledReason": null,
       "systems": [
         {
-          "image": "coloros17-findx9u-in",
-          "label": "ColorOS 17, Find X9 Ultra IN build",
-          "set": "x9u-in-sultra",
+          "image": "coloros17-findx9u-in-1105",
+          "label": "ColorOS 17, Find X9 Ultra IN build (November update)",
+          "set": "x9u-in-1105-sultra",
           "tested": false
         },
         {
           "image": "infinityx41-findx9u",
           "label": "Infinity-X 4.1, Find X9 Ultra build",
           "set": "infinityx",
+          "tested": false
+        },
+        {
+          "image": "lineage24-infiniti",
+          "label": "LineageOS 24, OnePlus 15 build",
+          "set": "lineage",
           "tested": false
         },
         {
@@ -1515,6 +1815,12 @@
           "image": "oxygenos16-cph2745",
           "label": "OxygenOS 16, OnePlus CPH2745 build",
           "set": "oxygen16",
+          "tested": false
+        },
+        {
+          "image": "nothingos5-asteroids",
+          "label": "Nothing OS 5.0, A series build",
+          "set": "nothing-a",
           "tested": false
         }
       ]
@@ -1530,9 +1836,9 @@
       "disabledReason": null,
       "systems": [
         {
-          "image": "coloros17-findx9u-in",
-          "label": "ColorOS 17, Find X9 Ultra IN build",
-          "set": "x9u-in-sultra",
+          "image": "coloros17-findx9u-in-1105",
+          "label": "ColorOS 17, Find X9 Ultra IN build (November update)",
+          "set": "x9u-in-1105-sultra",
           "tested": false
         },
         {
@@ -1542,9 +1848,21 @@
           "tested": false
         },
         {
+          "image": "lineage24-infiniti",
+          "label": "LineageOS 24, OnePlus 15 build",
+          "set": "lineage",
+          "tested": false
+        },
+        {
           "image": "hyperos-lhasa",
           "label": "HyperOS, Xiaomi 18 Fold build",
           "set": "hyper-f8u",
+          "tested": false
+        },
+        {
+          "image": "nothingos5-asteroids",
+          "label": "Nothing OS 5.0, A series build",
+          "set": "nothing-a",
           "tested": false
         }
       ]
@@ -1560,15 +1878,21 @@
       "disabledReason": null,
       "systems": [
         {
-          "image": "coloros17-findx9u-in",
-          "label": "ColorOS 17, Find X9 Ultra IN build",
-          "set": "x9u-in-sultra",
+          "image": "coloros17-findx9u-in-1105",
+          "label": "ColorOS 17, Find X9 Ultra IN build (November update)",
+          "set": "x9u-in-1105-sultra",
           "tested": false
         },
         {
           "image": "infinityx41-findx9u",
           "label": "Infinity-X 4.1, Find X9 Ultra build",
           "set": "infinityx",
+          "tested": false
+        },
+        {
+          "image": "lineage24-infiniti",
+          "label": "LineageOS 24, OnePlus 15 build",
+          "set": "lineage",
           "tested": false
         },
         {
@@ -1581,6 +1905,12 @@
           "image": "oxygenos16-cph2745",
           "label": "OxygenOS 16, OnePlus CPH2745 build",
           "set": "oxygen16",
+          "tested": false
+        },
+        {
+          "image": "nothingos5-asteroids",
+          "label": "Nothing OS 5.0, A series build",
+          "set": "nothing-a",
           "tested": false
         }
       ]
@@ -1596,9 +1926,9 @@
       "disabledReason": null,
       "systems": [
         {
-          "image": "coloros17-findx9u-in",
-          "label": "ColorOS 17, Find X9 Ultra IN build",
-          "set": "x9u-in-sultra",
+          "image": "coloros17-findx9u-in-1105",
+          "label": "ColorOS 17, Find X9 Ultra IN build (November update)",
+          "set": "x9u-in-1105-sultra",
           "tested": false
         },
         {
@@ -1611,6 +1941,12 @@
           "image": "infinityx41-findx9u",
           "label": "Infinity-X 4.1, Find X9 Ultra build",
           "set": "infinityx",
+          "tested": false
+        },
+        {
+          "image": "lineage24-infiniti",
+          "label": "LineageOS 24, OnePlus 15 build",
+          "set": "lineage",
           "tested": false
         },
         {
@@ -1668,15 +2004,21 @@
       "disabledReason": null,
       "systems": [
         {
-          "image": "coloros17-findx9u-in",
-          "label": "ColorOS 17, Find X9 Ultra IN build",
-          "set": "x9u-in-sultra",
+          "image": "coloros17-findx9u-in-1105",
+          "label": "ColorOS 17, Find X9 Ultra IN build (November update)",
+          "set": "x9u-in-1105-sultra",
           "tested": false
         },
         {
           "image": "infinityx41-findx9u",
           "label": "Infinity-X 4.1, Find X9 Ultra build",
           "set": "infinityx",
+          "tested": false
+        },
+        {
+          "image": "lineage24-infiniti",
+          "label": "LineageOS 24, OnePlus 15 build",
+          "set": "lineage",
           "tested": false
         },
         {
@@ -1689,6 +2031,12 @@
           "image": "oxygenos16-cph2745",
           "label": "OxygenOS 16, OnePlus CPH2745 build",
           "set": "oxygen16",
+          "tested": false
+        },
+        {
+          "image": "nothingos5-asteroids",
+          "label": "Nothing OS 5.0, A series build",
+          "set": "nothing-a",
           "tested": false
         }
       ]
@@ -1758,15 +2106,21 @@
       "disabledReason": null,
       "systems": [
         {
-          "image": "coloros17-findx9u-in",
-          "label": "ColorOS 17, Find X9 Ultra IN build",
-          "set": "x9u-in-sultra",
+          "image": "coloros17-findx9u-in-1105",
+          "label": "ColorOS 17, Find X9 Ultra IN build (November update)",
+          "set": "x9u-in-1105-sultra",
           "tested": false
         },
         {
           "image": "infinityx41-findx9u",
           "label": "Infinity-X 4.1, Find X9 Ultra build",
           "set": "infinityx",
+          "tested": false
+        },
+        {
+          "image": "lineage24-infiniti",
+          "label": "LineageOS 24, OnePlus 15 build",
+          "set": "lineage",
           "tested": false
         },
         {
@@ -1779,6 +2133,12 @@
           "image": "oxygenos16-cph2745",
           "label": "OxygenOS 16, OnePlus CPH2745 build",
           "set": "oxygen16",
+          "tested": false
+        },
+        {
+          "image": "nothingos5-asteroids",
+          "label": "Nothing OS 5.0, A series build",
+          "set": "nothing-a",
           "tested": false
         }
       ]
@@ -1920,15 +2280,21 @@
       "disabledReason": null,
       "systems": [
         {
-          "image": "coloros17-findx9u-in",
-          "label": "ColorOS 17, Find X9 Ultra IN build",
-          "set": "x9u-in-sultra",
+          "image": "coloros17-findx9u-in-1105",
+          "label": "ColorOS 17, Find X9 Ultra IN build (November update)",
+          "set": "x9u-in-1105-sultra",
           "tested": false
         },
         {
           "image": "infinityx41-findx9u",
           "label": "Infinity-X 4.1, Find X9 Ultra build",
           "set": "infinityx",
+          "tested": false
+        },
+        {
+          "image": "lineage24-infiniti",
+          "label": "LineageOS 24, OnePlus 15 build",
+          "set": "lineage",
           "tested": false
         },
         {
@@ -1941,6 +2307,12 @@
           "image": "oxygenos16-cph2745",
           "label": "OxygenOS 16, OnePlus CPH2745 build",
           "set": "oxygen16",
+          "tested": false
+        },
+        {
+          "image": "nothingos5-asteroids",
+          "label": "Nothing OS 5.0, A series build",
+          "set": "nothing-a",
           "tested": false
         }
       ]
@@ -1956,9 +2328,9 @@
       "disabledReason": null,
       "systems": [
         {
-          "image": "coloros17-findx9u-in",
-          "label": "ColorOS 17, Find X9 Ultra IN build",
-          "set": "x9u-in-sultra",
+          "image": "coloros17-findx9u-in-1105",
+          "label": "ColorOS 17, Find X9 Ultra IN build (November update)",
+          "set": "x9u-in-1105-sultra",
           "tested": false
         },
         {
@@ -1971,6 +2343,12 @@
           "image": "infinityx41-findx9u",
           "label": "Infinity-X 4.1, Find X9 Ultra build",
           "set": "infinityx",
+          "tested": false
+        },
+        {
+          "image": "lineage24-infiniti",
+          "label": "LineageOS 24, OnePlus 15 build",
+          "set": "lineage",
           "tested": false
         },
         {
@@ -2046,9 +2424,9 @@
       "disabledReason": null,
       "systems": [
         {
-          "image": "coloros17-findx9u-in",
-          "label": "ColorOS 17, Find X9 Ultra IN build",
-          "set": "x9u-in-sultra",
+          "image": "coloros17-findx9u-in-1105",
+          "label": "ColorOS 17, Find X9 Ultra IN build (November update)",
+          "set": "x9u-in-1105-sultra",
           "tested": false
         },
         {
@@ -2061,6 +2439,12 @@
           "image": "infinityx41-findx9u",
           "label": "Infinity-X 4.1, Find X9 Ultra build",
           "set": "infinityx",
+          "tested": false
+        },
+        {
+          "image": "lineage24-infiniti",
+          "label": "LineageOS 24, OnePlus 15 build",
+          "set": "lineage",
           "tested": false
         },
         {
@@ -2094,9 +2478,9 @@
       "disabledReason": null,
       "systems": [
         {
-          "image": "coloros17-findx9u-in",
-          "label": "ColorOS 17, Find X9 Ultra IN build",
-          "set": "x9u-in-sultra",
+          "image": "coloros17-findx9u-in-1105",
+          "label": "ColorOS 17, Find X9 Ultra IN build (November update)",
+          "set": "x9u-in-1105-sultra",
           "tested": false
         },
         {
@@ -2112,6 +2496,12 @@
           "tested": false
         },
         {
+          "image": "lineage24-infiniti",
+          "label": "LineageOS 24, OnePlus 15 build",
+          "set": "lineage",
+          "tested": false
+        },
+        {
           "image": "hyperos-lhasa",
           "label": "HyperOS, Xiaomi 18 Fold build",
           "set": "hyper-f8u",
@@ -2121,6 +2511,12 @@
           "image": "oxygenos16-cph2745",
           "label": "OxygenOS 16, OnePlus CPH2745 build",
           "set": "oxygen16",
+          "tested": false
+        },
+        {
+          "image": "nothingos5-metroid",
+          "label": "Nothing OS 5.0, Metroid build",
+          "set": "nothing-f8u",
           "tested": false
         },
         {
@@ -2178,9 +2574,9 @@
       "disabledReason": null,
       "systems": [
         {
-          "image": "coloros17-findx9u-in",
-          "label": "ColorOS 17, Find X9 Ultra IN build",
-          "set": "x9u-in-sultra",
+          "image": "coloros17-findx9u-in-1105",
+          "label": "ColorOS 17, Find X9 Ultra IN build (November update)",
+          "set": "x9u-in-1105-sultra",
           "tested": false
         },
         {
@@ -2196,6 +2592,12 @@
           "tested": false
         },
         {
+          "image": "lineage24-infiniti",
+          "label": "LineageOS 24, OnePlus 15 build",
+          "set": "lineage",
+          "tested": false
+        },
+        {
           "image": "hyperos-lhasa",
           "label": "HyperOS, Xiaomi 18 Fold build",
           "set": "hyper-f8u",
@@ -2205,6 +2607,12 @@
           "image": "oxygenos16-cph2745",
           "label": "OxygenOS 16, OnePlus CPH2745 build",
           "set": "oxygen16",
+          "tested": false
+        },
+        {
+          "image": "nothingos5-metroid",
+          "label": "Nothing OS 5.0, Metroid build",
+          "set": "nothing-f8u",
           "tested": false
         },
         {
@@ -2226,15 +2634,21 @@
       "disabledReason": null,
       "systems": [
         {
-          "image": "coloros17-findx9u-in",
-          "label": "ColorOS 17, Find X9 Ultra IN build",
-          "set": "x9u-in-sultra",
+          "image": "coloros17-findx9u-in-1105",
+          "label": "ColorOS 17, Find X9 Ultra IN build (November update)",
+          "set": "x9u-in-1105-sultra",
           "tested": false
         },
         {
           "image": "infinityx41-findx9u",
           "label": "Infinity-X 4.1, Find X9 Ultra build",
           "set": "infinityx",
+          "tested": false
+        },
+        {
+          "image": "lineage24-infiniti",
+          "label": "LineageOS 24, OnePlus 15 build",
+          "set": "lineage",
           "tested": false
         },
         {
@@ -2247,6 +2661,12 @@
           "image": "oxygenos16-cph2745",
           "label": "OxygenOS 16, OnePlus CPH2745 build",
           "set": "oxygen16",
+          "tested": false
+        },
+        {
+          "image": "nothingos5-asteroids",
+          "label": "Nothing OS 5.0, A series build",
+          "set": "nothing-a",
           "tested": false
         }
       ]
@@ -2265,6 +2685,60 @@
           "image": "oxygenos16-cph2745",
           "label": "OxygenOS 16, OnePlus CPH2745 build",
           "set": "oxygen16",
+          "tested": false
+        }
+      ]
+    },
+    {
+      "id": "s-plus-8650",
+      "label": "Galaxy S24+",
+      "model": "SM-S926",
+      "codename": "e2q",
+      "chip": "SM8650",
+      "form": "bar",
+      "enabled": true,
+      "disabledReason": null,
+      "systems": [
+        {
+          "image": "coloros17-findx9u-in-1105",
+          "label": "ColorOS 17, Find X9 Ultra IN build (November update)",
+          "set": "x9u-in-1105-sultra",
+          "tested": false
+        },
+        {
+          "image": "pixel9proxl-komodo",
+          "label": "Pixel 9 Pro XL, komodo build",
+          "set": "pixel9-sultra",
+          "tested": false
+        },
+        {
+          "image": "infinityx41-findx9u",
+          "label": "Infinity-X 4.1, Find X9 Ultra build",
+          "set": "infinityx",
+          "tested": false
+        },
+        {
+          "image": "lineage24-infiniti",
+          "label": "LineageOS 24, OnePlus 15 build",
+          "set": "lineage",
+          "tested": false
+        },
+        {
+          "image": "hyperos-lhasa",
+          "label": "HyperOS, Xiaomi 18 Fold build",
+          "set": "hyper-f8u",
+          "tested": false
+        },
+        {
+          "image": "nothingos5-metroid",
+          "label": "Nothing OS 5.0, Metroid build",
+          "set": "nothing-f8u",
+          "tested": false
+        },
+        {
+          "image": "originos7-pd2609ma",
+          "label": "OriginOS 7, vivo PD2609MA build",
+          "set": "originos",
           "tested": false
         }
       ]

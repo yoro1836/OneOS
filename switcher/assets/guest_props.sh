@@ -117,6 +117,34 @@ drop_stale_memory_lists() {
     return 0
 }
 
+# frp_format <file> <size>: a persistent data block as the guest's PersistentDataBlockService formats one
+# (formatPartitionLocked; see the FRP block in add). Offsets from the block's end: OEM unlock 1 byte, FRP
+# credential 1000, test harness 10000, FRP secret 32, FRP secret magic 8.
+frp_format() {
+    ff=$1; fs=$2
+    dd if=/dev/zero of="$ff" bs=4096 count=$((fs / 4096)) 2>/dev/null || return 1
+    printf '\031\220\030\163' | dd of="$ff" bs=1 seek=32 conv=notrunc 2>/dev/null || return 1
+    printf '\332\302\374\315\271\033\011\210' | dd of="$ff" bs=1 seek=$((fs - 1 - 1000 - 10000 - 32 - 8)) conv=notrunc 2>/dev/null || return 1
+    fd=$( { dd if=/dev/zero bs=32 count=1 2>/dev/null; dd if="$ff" bs=32 skip=1 2>/dev/null; } | sha256sum | cut -d' ' -f1)
+    case "$fd" in [0-9a-f]*) [ ${#fd} = 64 ] || return 1 ;; *) return 1 ;; esac
+    printf "$(echo "$fd" | sed 's/\(..\)/\\x\1/g')" > "$ff.d" 2>/dev/null
+    if [ "$(stat -c %s "$ff.d" 2>/dev/null)" != 32 ]; then
+        fo=""; fh=$fd
+        while [ -n "$fh" ]; do fo="$fo\\$(printf %03o $((0x$(echo "$fh" | cut -c1-2))))"; fh=${fh#??}; done
+        printf "$fo" > "$ff.d" 2>/dev/null
+    fi
+    [ "$(stat -c %s "$ff.d" 2>/dev/null)" = 32 ] && dd if="$ff.d" of="$ff" bs=32 count=1 conv=notrunc 2>/dev/null
+    r=$?; rm -f "$ff.d"; return $r
+}
+
+# frp_valid <node> <size>: the block reads back whole, with the marker and the digest the guest's service checks.
+frp_valid() {
+    [ "$(dd if="$1" bs=4096 2>/dev/null | wc -c)" = "$2" ] || return 1
+    [ "$(dd if="$1" bs=4 skip=8 count=1 2>/dev/null | od -A n -t x1 | tr -d ' \n')" = 19901873 ] || return 1
+    vd=$( { dd if=/dev/zero bs=32 count=1 2>/dev/null; dd if="$1" bs=32 skip=1 2>/dev/null; } | sha256sum | cut -d' ' -f1)
+    [ "$(dd if="$1" bs=32 count=1 2>/dev/null | od -A n -t x1 | tr -d ' \n')" = "$vd" ]
+}
+
 case "$1" in
 add)
     echo "guest_props add: start $(date +%T)"
@@ -202,6 +230,62 @@ add)
         }
         END { for (j = 0; j < n; j++) print order[j] "=" value[order[j]] }
     ' > "$NEW"
+    # The guest's own FRP block (0.5.18). ro.frp.pst is One UI's FRP partition; the guest's
+    # PersistentDataBlockService read it (its writes go to /dev/null, guest_pdb_readonly.py), so a fresh
+    # guest found One UI's Google account in it and its setup wizard stopped at "Verify your account" with
+    # no way to skip (A36, Nothing OS after Reset data). For the session the property names a loop device
+    # on $STAGE/data/oneos_frp.img: zeros the size of the real partition, the guest's own (Reset data and
+    # Remove take it with the rest of its data), so the guest never reads One UI's FRP record at all.
+    # One UI's value is on the override list (remove puts it back) and in host_frp_pst for the host-state
+    # check at the return. ONEOS_GUEST_OWN_FRP=0 leaves the property alone.
+    FRPK=ro.frp.pst
+    FRPV=$(getprop "$FRPK")
+    case "$FRPV" in ""|/dev/block/loop*|/dev/block/oneos_frp) ;; *) echo "$FRPV" > "$STAGE/host_frp_pst" ;; esac
+    # Only with SELinux permissive (oneos_switch.sh's setenforce 0): enforcing, the loop's kernel reads of the
+    # image are refused (A36: avc denied { read } for kworker on oneos_frp_test.img) and the guest could not boot.
+    if [ "$(getenforce 2>/dev/null)" != Permissive ]; then
+        echo "guest_props: SELinux is $(getenforce 2>/dev/null): $FRPK left as One UI's"
+    elif [ "${ONEOS_GUEST_OWN_FRP:-1}" = 1 ] && [ -n "$FRPV" ] && [ "${FRPV#/dev/block/loop}" = "$FRPV" ] && [ "$FRPV" != /dev/block/oneos_frp ]; then
+        FRPD=$(readlink -f "$FRPV" 2>/dev/null)
+        FRPS=$(blockdev --getsize64 "$FRPD" 2>/dev/null)
+        FRPI="$STAGE/data/oneos_frp.img"
+        case "$FRPS" in ''|0|*[!0-9]*) FRPS="" ;; esac
+        if [ -n "$FRPS" ] && [ $((FRPS % 4096)) = 0 ] && [ "$FRPS" -le 67108864 ]; then
+            # Laid out as the guest's PersistentDataBlockService.formatPartitionLocked writes it (the guest cannot
+            # write it itself: its writes go to /dev/null): the partition marker 0x19901873 and data size 0 after
+            # the 32-byte digest, FRP_SECRET_MAGIC before the all-zero default secret (FRP inactive: the service
+            # deactivates FRP with the default secret), zeros elsewhere, and the digest computeDigestLocked
+            # checks, SHA-256 of 32 zero bytes and the rest of the block. A zeroed block failed its checksum and
+            # took system_server down at boot phase 500 (TestHarnessModeService: "invalid checksum").
+            # Remade every session: nothing in it changes.
+            rm -f "$FRPI"
+            if frp_format "$FRPI" "$FRPS"; then chmod 600 "$FRPI"; else rm -f "$FRPI"; echo "guest_props: could not make $FRPI; $FRPK left as One UI's"; fi
+            FRPL=""
+            [ -f "$FRPI" ] && FRPL=$(losetup -s -f "$FRPI" 2>/dev/null)
+            # The loop's own node is root's 0600 and the guest's system_server (uid 1000) could not open it:
+            # every read failed and the service took that as a bad checksum (builds 148 and 149 never booted;
+            # A36 test in a running session: root-only loop node "Permission denied" as uid 1000, this node
+            # read). $FRPN has the real partition's owner, mode and label.
+            FRPN=/dev/block/oneos_frp
+            rm -f "$FRPN"
+            fmm=$(stat -L -c '%t %T' "$FRPL" 2>/dev/null)
+            if [ -b "$FRPL" ] && [ -n "$fmm" ] &&
+               mknod "$FRPN" b $((0x${fmm% *})) $((0x${fmm#* })) 2>/dev/null &&
+               chown 1000:1000 "$FRPN" && chmod 0600 "$FRPN" &&
+               chcon u:object_r:frp_block_device:s0 "$FRPN" 2>/dev/null &&
+               [ "$(stat -c '%u %a' "$FRPN" 2>/dev/null)" = "1000 600" ] && frp_valid "$FRPN" "$FRPS" &&
+               "$RP" -n "$FRPK" "$FRPN" 2>/dev/null; then
+                echo "$FRPK=$FRPV" >> "$OVR"
+                echo "guest_props: $FRPK=$FRPV overridden to $FRPN ($FRPL) for the session (the guest's own FRP block, $FRPS bytes)"
+            else
+                rm -f "$FRPN"
+                [ -b "$FRPL" ] && losetup -d "$FRPL" 2>/dev/null
+                echo "guest_props: no FRP node for $FRPI ('$FRPL'); $FRPK left as One UI's"
+            fi
+        else
+            echo "guest_props: $FRPK $FRPV ($FRPD) size '$FRPS' not usable; left as One UI's"
+        fi
+    fi
     # Window-level blur (run 31: glass UI flat in places). The Find N6 turns
     # it on in its vendor build.prop, which the GSI does not carry. The guest
     # SurfaceFlinger logged "Disabling blur effects, they are not supported."
@@ -566,6 +650,63 @@ add)
         fi
         [ -z "$out" ] || echo "guest_props: ColorOS's last-boot records from an earlier session blanked for the session:$out"
     fi
+    # LineageOS (0.5.06): About phone shows OneOS's build, not the OnePlus 15
+    # nightly it came from (owner: "20261114-OneOS"). Only the version strings;
+    # the build fingerprint and device stay the image's.
+    if grep -q '^ro\.lineage\.version=' "$NEW"; then
+        for kv in ro.lineage.version=24.0-20261114-OneOS ro.lineage.display.version=24-20261114-OneOS ro.lineage.releasetype=OneOS; do
+            sed -i "/^${kv%%=*}=/d" "$NEW"
+            echo "$kv" >> "$NEW"
+        done
+        echo "guest_props: LineageOS version shown as 24.0-20261114-OneOS"
+    fi
+    # The S23 family (SM8550, HIDL audio HAL), any system (0.5.00):
+    # guest_prepare.sh gave the guest the vendor's Bluetooth audio module, as
+    # One UI plays A2DP (marker guest_bt_sw). That module streams through a
+    # software A2DP session, so offload goes off for the session; with it on,
+    # the guest opened the hardware-offload session the HAL's PAL never watches
+    # (S23/S23+ on 0.4.99, "Rx device start failed with status -38"; ColorOS
+    # and Pixel alike).
+    # Memory only. ONEOS_GUEST_BT_OFFLOAD=1 leaves it as One UI has it.
+    if [ "${ONEOS_GUEST_BT_OFFLOAD:-0}" = 0 ] && [ -f "$STAGE/guest_bt_sw" ]; then
+        k=persist.bluetooth.a2dp_offload.disabled
+        if grep -qxF "$k" "$HOST"; then
+            hv=$(getprop "$k")
+            if [ "$hv" != true ] && "$RP" -n "$k" true 2>/dev/null; then
+                echo "$k=$hv" >> "$OVR"
+                echo "guest_props: $k=$hv overridden to true for the session (A2DP through the vendor's Bluetooth module, as One UI)"
+            fi
+        else
+            sed -i "/^persist\.bluetooth\.a2dp_offload\.disabled=/d" "$NEW"
+            echo "$k=true" >> "$NEW"
+            echo "guest_props: $k=true for the session (A2DP through the vendor's Bluetooth module, as One UI)"
+        fi
+    fi
+    # Exynos (0.5.10): One UI describes its A2DP offload only in Samsung's own
+    # properties (persist.bluetooth.samsung.a2dp_offload.cap=sbc-aptx-ssc-hifi on
+    # the Galaxy S26 SM-S942B) and leaves AOSP's ro.bluetooth.a2dp_offload.supported
+    # empty. A guest's Bluetooth stack read that as "no offload" and opened a
+    # software session, which Samsung's Exynos audio HAL never streams to (its A2DP
+    # is the hardware-offload proxy it creates at start): the earbuds connected and
+    # played nothing (S26 ColorOS report cdd92328, "BTAudioSessionAidl ... has NO
+    # port state observer"). The guest now gets AOSP's offload properties with the
+    # codecs both sides know, so it opens the hardware-offload session One UI uses.
+    # Guest property file only; One UI's own are not touched. Qualcomm phones have
+    # their own path above. ONEOS_GUEST_BT_OFFLOAD=1 leaves it out.
+    SAMCAP=$(getprop persist.bluetooth.samsung.a2dp_offload.cap)
+    if [ "${ONEOS_GUEST_BT_OFFLOAD:-0}" = 0 ] && [ "$(getprop ro.soc.manufacturer)" = Samsung ] &&
+       [ -n "$SAMCAP" ] && [ -z "$(getprop ro.bluetooth.a2dp_offload.supported)" ] && [ ! -f "$STAGE/guest_bt_sw" ]; then
+        cap=""
+        for c in $(echo "$SAMCAP" | tr '-' ' '); do
+            case "$c" in sbc|aac|aptx|aptxhd|ldac) cap="${cap:+$cap-}$c" ;; esac
+        done
+        cap=${cap:-sbc}
+        for kv in ro.bluetooth.a2dp_offload.supported=true persist.bluetooth.a2dp_offload.disabled=false persist.bluetooth.a2dp_offload.cap=$cap; do
+            sed -i "/^$(printf '%s' "${kv%%=*}" | sed 's/[.]/\\./g')=/d" "$NEW"
+            echo "$kv" >> "$NEW"
+        done
+        echo "guest_props: Exynos A2DP offload for the guest (One UI's Samsung cap '$SAMCAP' -> persist.bluetooth.a2dp_offload.cap=$cap, supported=true, disabled=false)"
+    fi
     if [ "${ONEOS_GUEST_BT_OFFLOAD:-0}" = 0 ] && [ "$GUEST_OPLUS" = 0 ]; then
         for k in persist.bluetooth.leaudio_offload.disabled; do
             if grep -qxF "$k" "$HOST"; then
@@ -691,7 +832,13 @@ add)
         soc=$(getprop ro.soc.model)
         case "${ONEOS_GUEST_BT_ORIGIN:-auto}:$soc" in
             1:*) why="ONEOS_GUEST_BT_ORIGIN=1" ;;
-            auto:MT6789*) why="$soc: OPPO's quality report parser reads past this controller's 48-byte events" ;;
+            # 0.5.07: no longer by default. With it, OPPO's libbluetooth_jni.so registers only
+            # Android's original natives, but the Bluetooth app still calls OPPO's own at
+            # start (OplusBtNativeChannelUtils.classInitNative): UnsatisfiedLinkError, and
+            # com.android.bluetooth died at every start, so Bluetooth never turned on at all
+            # (A16 4G dbd78088 "Bluetooth doesn't even turn on", A15 d1d7cd5a, A16 0b151c94;
+            # 14 and 22 crashes). The reconnect loop it was for is the lesser harm.
+            # ONEOS_GUEST_BT_ORIGIN=1 still sets it.
             *) why="" ;;
         esac
         if [ -n "$why" ]; then
@@ -777,6 +924,20 @@ add)
         sed -i "s/^ro\.oplus\.display\.screenhole\.positon=.*/ro.oplus.display.screenhole.positon=$h/" "$NEW" &&
             echo "guest_props: ro.oplus.display.screenhole.positon=$h for the session ($what; the image's: $was)"
     fi
+    # Mid-range Galaxy A and M phones (0.5.14, owner's A36 on LineageOS: "a bit sluggish"): the
+    # guest's SystemUI draws its rounded corners and cutout as one full-screen layer
+    # (ScreenDecorHwcOverlay) that their composer does not take, so SurfaceFlinger composed the whole
+    # screen on the GPU every frame at 120 Hz (1,325 GPU-missed frames, GPU pinned at 1010 MHz).
+    # Without it the panel's own rounded corners are all there is to see. ONEOS_GUEST_SCREEN_DECOR=1
+    # keeps it.
+    case "$(getprop ro.product.model)" in
+        SM-A*|SM-M*)
+            if [ "${ONEOS_GUEST_SCREEN_DECOR:-0}" != 1 ]; then
+                sed -i '/^debug\.disable_screen_decorations=/d' "$NEW"
+                echo "debug.disable_screen_decorations=true" >> "$NEW"
+                echo "guest_props: debug.disable_screen_decorations=true for the session (mid-range Galaxy: the decor layer went to the GPU every frame)"
+            fi ;;
+    esac
     # AppSearch isolated storage: Pixel sets ro.appsearch.feature.enable_isolated_storage=true,
     # and system_server's AppSearch then starts a protected VM through the
     # virtualization APEX, which is One UI's here (run 41: UnsatisfiedLinkError in
@@ -1434,6 +1595,8 @@ add)
 remove)
     # Host values add overrode for the session (blur, sound names, audio HAL
     # extension, isolated compilation).
+    # The guest's FRP node (add): its loop is detached with the stage's others by return_to_oneui.sh.
+    rm -f /dev/block/oneos_frp 2>/dev/null
     if [ -f "$OVR" ]; then
         while IFS= read -r line; do
             "$RP" -n "${line%%=*}" "${line#*=}" 2>/dev/null && echo "guest_props: restored host ${line%%=*}=${line#*=}"

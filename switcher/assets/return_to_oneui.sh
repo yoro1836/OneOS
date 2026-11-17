@@ -499,7 +499,9 @@ rm -f /dev/oneos_dt2w_event* 2>/dev/null
 # One UI's protected state against the record the switch made (see
 # oneos_switch.sh): every guest process is gone by now. Logged only.
 host_state() {
-    f=$(readlink -f "$(getprop ro.frp.pst)" 2>/dev/null)
+    # One UI's FRP partition: the session points ro.frp.pst at the guest's own block (guest_props.sh).
+    f=$(cat "$S/host_frp_pst" 2>/dev/null); [ -n "$f" ] || f=$(getprop ro.frp.pst)
+    f=$(readlink -f "$f" 2>/dev/null)
     [ -b "$f" ] && echo "frp $(sha256sum "$f" 2>/dev/null | cut -d' ' -f1)"
     for p in /data/misc/gatekeeper /data/apex/active /data/apex/sessions; do
         [ -d "$p" ] && find "$p" -type f -exec stat -c '%n %s %Y' {} + 2>/dev/null | sort
@@ -1108,6 +1110,14 @@ while :; do
             # An am without the command: One UI's home screen process instead.
             *nknown*|*rror*) pidof com.sec.android.app.launcher >/dev/null && { up=$t; say "One UI Home running after ${t}s"; } ;;
         esac
+        # 0.5.07: One UI is up, so the "Returning to One UI" layer goes now. It ends
+        # itself on One UI's boot events, but twice it stayed over a working One UI
+        # (S24 FE HyperOS fbc98ae7, S24 OriginOS f4a3c170: "the Returning to One UI
+        # didn't disappear").
+        if [ $up -gt 0 ] && type oneos_boot_stop >/dev/null 2>&1; then
+            oneos_boot_stop
+            say "Return splash: stopped (One UI is up)"
+        fi
     fi
     # The "Returning to One UI" layer goes once One UI is unlocked. Its own
     # watch (boot_status.sh: boot_progress_enable_screen, bootanim exit) can

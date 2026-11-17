@@ -21,8 +21,8 @@ import java.lang.reflect.Method;
  *
  * Runs inside the guest, as root, with the guest's own framework:
  *   CLASSPATH=/data/oneos_overlay_dimen.dex app_process /system/bin OneOSOverlayDimen \
- *       <overlay name> <target package> <package:dimen/name>=<px> ...
- *   (<package:dimen/name>=float:<value> makes a plain float instead of a dimension)
+ *       <overlay name> <target package> <package:dimen/name>=<px> | <package:dimen/name>=f:<float> ...
+ *   (=f:<value> or =float:<value> makes a plain float instead of a dimension)
  *   ... OneOSOverlayDimen --unregister <overlay name>
  * Prints "registered <identifier>" (or "unregistered ..."), or the error and exits 1.
  */
@@ -46,13 +46,9 @@ public class OneOSOverlayDimen {
         int eq = args[i].lastIndexOf('=');
         if (eq <= 0) throw new IllegalArgumentException("not <res>=<px>: " + args[i]);
         String v = args[i].substring(eq + 1);
-        if (v.startsWith("float:")) {
-          // A plain float (type 4), what Resources.getFloat reads: SystemUI's dimen/pixel_pitch.
-          FabricatedOverlay.class.getMethod("setResourceValue", String.class, float.class, String.class)
-              .invoke(fo, args[i].substring(0, eq), Float.parseFloat(v.substring(6)), null);
-          continue;
-        }
-        FabricatedOverlay.class.getMethod("setResourceValue", String.class, float.class, int.class, String.class)
+        if (v.startsWith("f:")) floatValue(fo, args[i].substring(0, eq), Float.parseFloat(v.substring(2)));
+        else if (v.startsWith("float:")) floatValue(fo, args[i].substring(0, eq), Float.parseFloat(v.substring(6)));
+        else FabricatedOverlay.class.getMethod("setResourceValue", String.class, float.class, int.class, String.class)
             .invoke(fo, args[i].substring(0, eq), Float.parseFloat(v), TypedValue.COMPLEX_UNIT_PX, null);
       }
       b.getMethod("registerFabricatedOverlay", FabricatedOverlay.class).invoke(builder, fo);
@@ -63,6 +59,25 @@ public class OneOSOverlayDimen {
       System.out.println("failed: " + c);
       System.exit(1);
     }
+  }
+
+  /**
+   * A plain float (TypedValue.TYPE_FLOAT), such as config_screenBrightnessSettingMaximumFloat (0.5.18): the public
+   * setResourceValue takes integer types or a dimension only, so the entry is added to the overlay's own list, as
+   * that method does for an integer.
+   */
+  private static void floatValue(FabricatedOverlay fo, String name, float value) throws Exception {
+    Class<?> ec = Class.forName("android.os.FabricatedOverlayInternalEntry");
+    Object e = ec.getConstructor().newInstance();
+    ec.getField("resourceName").set(e, name);
+    ec.getField("dataType").setInt(e, TypedValue.TYPE_FLOAT);
+    ec.getField("data").setInt(e, Float.floatToIntBits(value));
+    java.lang.reflect.Field of = FabricatedOverlay.class.getDeclaredField("mOverlay");
+    of.setAccessible(true);
+    Object internal = of.get(fo);
+    @SuppressWarnings("unchecked")
+    java.util.List<Object> entries = (java.util.List<Object>) internal.getClass().getField("entries").get(internal);
+    entries.add(e);
   }
 
   private static void commit(OverlayManagerTransaction tx) throws Exception {

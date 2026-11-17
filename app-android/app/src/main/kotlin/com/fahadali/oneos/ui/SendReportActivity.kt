@@ -3,7 +3,9 @@ package com.fahadali.oneos.ui
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -29,6 +31,7 @@ import com.fahadali.oneos.core.model.PhoneProfile
 import com.fahadali.oneos.core.model.Profiles
 import com.fahadali.oneos.core.model.ReportLogs
 import com.fahadali.oneos.core.model.ReportRecord
+import com.fahadali.oneos.core.model.ReportReply
 import com.fahadali.oneos.core.model.Reports
 import com.fahadali.oneos.core.model.StartAnswer
 import com.fahadali.oneos.core.model.Units
@@ -76,7 +79,14 @@ class SendReportActivity : ToolbarActivity() {
         /** The report code a bundle was sent with (Last session shows it). */
         fun sentCode(ctx: Context, zip: File): String? = prefs(ctx).getString(zip.name.removeSuffix(".zip"), null)
 
-        private fun prefs(ctx: Context) = ctx.getSharedPreferences("reports_sent", Context.MODE_PRIVATE)
+        internal fun prefs(ctx: Context) = ctx.getSharedPreferences("reports_sent", Context.MODE_PRIVATE)
+
+        /** The reporter's last valid Telegram username (in reports_sent; the sent codes there are keyed by zip name). */
+        internal const val CONTACT_KEY = "contact_telegram"
+
+        /** 0.5.16 (owner): the Telegram sign-in's pass and @username (in reports_sent). */
+        internal const val PASS_KEY = "tg_pass"
+        internal const val USERNAME_KEY = "tg_username"
 
         internal fun remember(ctx: Context, zip: File, code: String) {
             prefs(ctx).edit().putString(zip.name.removeSuffix(".zip"), code).apply()
@@ -102,6 +112,8 @@ class SendReportFragment : PreferenceFragmentCompat() {
         val sessionAppCode: Int? = null,
         /** The day the session's bundle was written, from its generatedAt. */
         val sessionDate: String? = null,
+        /** The session ran with Full session logs off (ONEOS_FULL_LOGS=0 in the bundle's stage/session.env). */
+        val fullLogsOff: Boolean = false,
     )
 
     private lateinit var facts: Facts
@@ -117,6 +129,20 @@ class SendReportFragment : PreferenceFragmentCompat() {
 
     /** The answers came from How's it going? in the other system (0.4.30). */
     private var fromGuest = false
+
+    // 0.5.16 (owner): reports only from group members. Sign-in state; the pass itself is in prefs.
+    private var signingIn = false
+    private var claimCode: String? = null
+    private var signinUrl: String? = null
+    private var claimTries = 0
+    private var claimErrors = 0
+    private var claimBusy = false
+    private var signinNote: String? = null
+    private var notMember = false
+    private val poll = Runnable { pollClaim() }
+
+    private val pass: String? get() = SendReportActivity.prefs(requireContext()).getString(SendReportActivity.PASS_KEY, null)?.takeIf { it.isNotEmpty() }
+    private val username: String? get() = SendReportActivity.prefs(requireContext()).getString(SendReportActivity.USERNAME_KEY, null)?.takeIf { it.isNotEmpty() }
 
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
         val host = requireActivity() as SendReportActivity
@@ -150,7 +176,18 @@ class SendReportFragment : PreferenceFragmentCompat() {
         redraw()
     }
 
+    override fun onResume() {
+        super.onResume()
+        if (claimCode != null) schedulePoll()
+    }
+
+    override fun onPause() {
+        main.removeCallbacks(poll)
+        super.onPause()
+    }
+
     override fun onDestroy() {
+        main.removeCallbacks(poll)
         io.shutdown()
         super.onDestroy()
     }
@@ -173,6 +210,11 @@ class SendReportFragment : PreferenceFragmentCompat() {
                 sessionAppVersion = json.optJSONObject("app")?.optString("version")?.takeIf { it.isNotEmpty() },
                 sessionAppCode = json.optJSONObject("app")?.optInt("versionCode")?.takeIf { it > 0 },
                 sessionDate = json.optString("generatedAt").takeIf { it.length >= 10 }?.take(10),
+                // 0.5.17: Record full logs from now in the guest app leaves stage/full_logs_mid.log: logs from then on.
+                fullLogsOff = runCatching {
+                    val stage = File(ProbeSession.folderOf(zip), "stage")
+                    File(stage, "session.env").readLines().contains("ONEOS_FULL_LOGS=0") && !File(stage, "full_logs_mid.log").isFile
+                }.getOrDefault(false),
             )
         } else {
             val device = json?.optJSONObject("device")
@@ -244,6 +286,10 @@ class SendReportFragment : PreferenceFragmentCompat() {
             about.row(getString(R.string.send_session_old_title), getString(R.string.send_session_old_summary, ran, com.fahadali.oneos.BuildConfig.VERSION_NAME))
         }
 
+        if (facts.session && facts.fullLogsOff) {
+            about.row(getString(R.string.send_full_logs_off_title), getString(R.string.send_full_logs_off_summary))
+        }
+
         if (facts.session) {
             val how = category(getString(R.string.send_cat_how))
             if (fromGuest) how.row(getString(R.string.send_from_guest), getString(R.string.send_from_guest_summary))
@@ -269,9 +315,18 @@ class SendReportFragment : PreferenceFragmentCompat() {
         more.row(getString(R.string.send_note_title), checklist.note.ifEmpty { getString(R.string.send_note_hint) }, enabled = !sending) {
             text(R.string.send_note_title, checklist.note, Reports.NOTE_MAX, multiLine = true) { checklist = checklist.copy(note = it) }
         }
-        more.row(getString(R.string.send_contact_title), checklist.contact.ifEmpty { getString(R.string.send_contact_hint) }, enabled = !sending) {
-            text(R.string.send_contact_title, checklist.contact, Reports.CONTACT_MAX, multiLine = false) { checklist = checklist.copy(contact = it) }
+        // Required since 0.5.10 (owner: "make giving contact in the report compulsory, with proper telegram
+        // username"); the last good one is filled in again for the next report.
+        if (checklist.contact.isEmpty()) savedContact(ctx)?.let { checklist = checklist.copy(contact = it) }
+        val contactSummary = when {
+            checklist.contact.isEmpty() -> getString(R.string.send_contact_hint)
+            Reports.telegramUsername(checklist.contact) == null -> getString(R.string.send_contact_invalid, checklist.contact)
+            else -> checklist.contact
         }
+        more.row(getString(R.string.send_contact_title) + " *", contactSummary, enabled = !sending) { askContact() }
+
+        // Who sends (0.5.16, owner: reports only from group members).
+        telegramRows(category(getString(R.string.send_cat_telegram)))
 
         // What is sent.
         val what = category(getString(R.string.send_cat_what))
@@ -315,12 +370,118 @@ class SendReportFragment : PreferenceFragmentCompat() {
             }
             else -> {
                 failure?.let { send.row(getString(R.string.send_failed_title), it) }
-                send.row(getString(R.string.send_button), getString(R.string.send_button_summary)) { send(zip) }
+                send.row(getString(R.string.send_button), getString(R.string.send_button_summary), enabled = pass != null) { send(zip) }
                 if (failure != null) {
                     send.row(getString(R.string.send_share_instead), getString(R.string.send_share_instead_summary)) { shareInstead(zip) }
                 }
             }
         }
+    }
+
+    private fun telegramRows(cat: PreferenceCategory) {
+        if (pass != null) {
+            val name = username
+            cat.row(
+                if (name != null) getString(R.string.send_tg_signed_in_as, name) else getString(R.string.send_tg_signed_in),
+                null,
+                enabled = !sending,
+            )
+            cat.row(getString(R.string.send_tg_sign_out), null, enabled = !sending) {
+                SendReportActivity.prefs(requireContext()).edit().remove(SendReportActivity.PASS_KEY).remove(SendReportActivity.USERNAME_KEY).apply()
+                notMember = false
+                signinNote = null
+                redraw()
+            }
+            if (notMember) cat.row(getString(R.string.send_tg_join_title), getString(R.string.send_tg_join_summary)) { openLink(ReportSender.GROUP_URL) }
+            return
+        }
+        signinNote?.let { cat.row(it, null) }
+        if (claimCode != null) {
+            cat.row(getString(R.string.send_tg_waiting_title), getString(R.string.send_tg_waiting_summary)) { signinUrl?.let(::openLink) }
+        } else {
+            cat.row(getString(R.string.send_tg_sign_in), getString(R.string.send_tg_sign_in_summary), enabled = !signingIn && !sending) { startSignIn() }
+        }
+    }
+
+    private fun openLink(url: String) {
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        } catch (_: ActivityNotFoundException) {
+            Toast.makeText(requireContext(), R.string.send_tg_no_app, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun startSignIn() {
+        signingIn = true
+        signinNote = null
+        redraw()
+        io.execute {
+            val result = runCatching { ReportSender.signin() }
+            main.post {
+                signingIn = false
+                if (!isAdded) return@post
+                result.onSuccess { (code, url) ->
+                    claimCode = code
+                    signinUrl = url
+                    claimTries = 0
+                    claimErrors = 0
+                    openLink(url)
+                    if (isResumed) schedulePoll()
+                }.onFailure { e -> signinNote = e.message ?: e.javaClass.simpleName }
+                redraw()
+            }
+        }
+    }
+
+    /** Every 3 s while the screen is in front, 60 times (3 minutes); a pause does not use them up. */
+    private fun schedulePoll() {
+        main.removeCallbacks(poll)
+        main.postDelayed(poll, 3_000L)
+    }
+
+    private fun pollClaim() {
+        val code = claimCode ?: return
+        if (claimBusy || !isAdded) return
+        if (claimTries >= 60) return endSignIn(getString(R.string.send_tg_expired))
+        claimTries++
+        claimBusy = true
+        io.execute {
+            val result = runCatching { ReportSender.claim(code) }
+            main.post {
+                claimBusy = false
+                if (!isAdded || claimCode != code) return@post
+                result.onSuccess { claim ->
+                    claimErrors = 0
+                    when (claim) {
+                        ReportReply.Claim.Waiting -> if (isResumed) schedulePoll()
+                        ReportReply.Claim.Expired -> endSignIn(getString(R.string.send_tg_expired))
+                        is ReportReply.Claim.Done -> {
+                            SendReportActivity.prefs(requireContext()).edit()
+                                .putString(SendReportActivity.PASS_KEY, claim.pass)
+                                .putString(SendReportActivity.USERNAME_KEY, claim.username ?: "")
+                                .apply()
+                            notMember = !claim.member
+                            endSignIn(null)
+                        }
+                    }
+                }.onFailure { e ->
+                    // A dropped connection is tried again twice; a refusal or a 5xx is shown.
+                    if (e !is ReportSender.Failed && ++claimErrors < 3) {
+                        if (isResumed) schedulePoll()
+                    } else {
+                        endSignIn(e.message ?: e.javaClass.simpleName)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun endSignIn(note: String?) {
+        main.removeCallbacks(poll)
+        claimCode = null
+        signinUrl = null
+        signinNote = note
+        if (isAdded) redraw()
     }
 
     private fun imageLabel(i: ImageRef): String = if (i.name.contains(i.shortName)) i.name else "${i.name} (${i.shortName})"
@@ -365,11 +526,28 @@ class SendReportFragment : PreferenceFragmentCompat() {
             .show()
     }
 
+    private fun askContact() =
+        text(R.string.send_contact_title, checklist.contact, Reports.CONTACT_MAX, multiLine = false) { raw ->
+            val user = Reports.telegramUsername(raw)
+            checklist = checklist.copy(contact = user ?: raw)
+            if (user != null) SendReportActivity.prefs(requireContext()).edit().putString(SendReportActivity.CONTACT_KEY, user).apply()
+            else if (raw.isNotBlank()) Toast.makeText(requireContext(), getString(R.string.send_contact_invalid, raw), Toast.LENGTH_LONG).show()
+        }
+
+    private fun savedContact(ctx: Context): String? = SendReportActivity.prefs(ctx).getString(SendReportActivity.CONTACT_KEY, null)?.let(Reports::telegramUsername)
+
     private fun send(zip: File) {
         if (facts.session && checklist.start == null) {
             Toast.makeText(requireContext(), R.string.send_need_start, Toast.LENGTH_SHORT).show()
             return
         }
+        if (Reports.telegramUsername(checklist.contact) == null) {
+            Toast.makeText(requireContext(), R.string.send_contact_needed, Toast.LENGTH_LONG).show()
+            askContact()
+            return
+        }
+        val tgPass = pass
+        if (tgPass == null) return
         val app = requireContext().applicationContext
         sending = true
         failure = null
@@ -413,7 +591,7 @@ class SendReportFragment : PreferenceFragmentCompat() {
                     logs = file?.let { ReportLogs(if (f.session) "session" else "probe", it.name, full = f.session && it == zip, bytes = it.length(), sha256 = sha256(it)) },
                 )
                 try {
-                    ReportSender.send(record, file) { sent, total ->
+                    ReportSender.send(record, file, tgPass) { sent, total ->
                         if (total > 0) main.post { progress = app.getString(R.string.send_progress, (sent * 100 / total).toInt(), Units.bytes(total)); if (isAdded) redraw() }
                     }
                 } finally {
@@ -426,7 +604,17 @@ class SendReportFragment : PreferenceFragmentCompat() {
                 result.onSuccess { code ->
                     sentCode = code
                     SendReportActivity.remember(app, zip, code)
-                }.onFailure { e -> failure = e.message ?: e.javaClass.simpleName }
+                }.onFailure { e ->
+                    failure = e.message ?: e.javaClass.simpleName
+                    when (e) {
+                        // 0.5.16: sign in again (the pass is no longer good), or join the group and retry.
+                        is ReportSender.NeedsSignIn -> {
+                            SendReportActivity.prefs(app).edit().remove(SendReportActivity.PASS_KEY).remove(SendReportActivity.USERNAME_KEY).apply()
+                            notMember = false
+                        }
+                        is ReportSender.NotMember -> { notMember = true; failure = null }
+                    }
+                }
                 if (isAdded) redraw()
             }
         }
