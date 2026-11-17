@@ -1297,6 +1297,443 @@ if [ -f "$STAGE/nothing_customringtone.tar" ] && [ "${ONEOS_GUEST_NT_RINGTONES:-
         fi
     fi
 fi
+# 0.5.19 (S24 fork): guest media/notification/call volume was binary (mute or
+# full, no steps). The guest's Pixel audioserver reads its engine config only
+# from /vendor/etc/audio_policy_engine_configuration.xml (AOSP EngineConfig.h
+# DEFAULT_PATH, no search fallback); One UI ships none there (Samsung attenuates
+# in its own audio HAL), so the Pixel audioserver fell back to AOSP's built-in
+# EngineDefaultConfig, whose curves are flat ({(0,0),(100,15)} for every stream)
+# -> any non-zero index is ~full scale. The guest drives no Samsung HAL volume,
+# so nothing attenuated. Add a proper AOSP engine config (real per-index curves,
+# the canonical frameworks/av example) at that exact path through a read-only
+# overlay on the guest's vendor/etc (same trick as the Nothing ringtones above;
+# One UI's own /vendor is a slave bind, untouched), so the Pixel audioserver
+# applies the attenuation in software and the slider gets steps. Only when the
+# guest has no engine config of its own, and fail-safe: a refused overlay leaves
+# the flat built-in curves (still boots, volume just stays binary).
+# ONEOS_GUEST_APM_ENGINE=0 leaves it out.
+if [ "${ONEOS_GUEST_APM_ENGINE:-1}" = 1 ] && [ -d "$ROOTFS/vendor/etc" ] \
+   && [ ! -e "$ROOTFS/vendor/etc/audio_policy_engine_configuration.xml" ]; then
+    AEV="$STAGE/apm_engine_vendor_etc"
+    if mount | grep -q " $ROOTFS/vendor/etc type overlay"; then
+        echo "Guest audio volume: an overlay is already on vendor/etc; engine config left to the built-in curves"
+    else
+        mkdir -p "$AEV" && { mount | grep -q " $AEV " || $BB mount -t tmpfs -o size=1m,mode=755 tmpfs "$AEV"; } &&
+            $BB mount --make-private "$AEV" 2>/dev/null
+        rm -rf "$AEV/up" && mkdir -p "$AEV/up"
+        cat > "$AEV/up/audio_policy_engine_configuration.xml" <<'APMENGINE'
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<configuration version="1.0">
+<ProductStrategies>
+
+    <!-- "hidden strategies" like TTS, enforced audible:
+            Shall we expose them here or keep it hard coded -->
+
+    <!-- Used to identify the volume of audio streams for enforced system sounds in certain
+         countries (e.g. camera in Japan)
+         This strategy will only have higher priority than phone if force for system is set to
+         enforced. -->
+
+    <ProductStrategy name="STRATEGY_PHONE">
+        <AttributesGroup streamType="AUDIO_STREAM_VOICE_CALL" volumeGroup="voice_call">
+            <Attributes> <Usage value="AUDIO_USAGE_VOICE_COMMUNICATION"/> </Attributes>
+        </AttributesGroup>
+        <AttributesGroup streamType="AUDIO_STREAM_BLUETOOTH_SCO" volumeGroup="bluetooth_sco">
+            <Attributes> <Flags value="AUDIO_FLAG_SCO"/> </Attributes>
+        </AttributesGroup>
+    </ProductStrategy>
+
+    <ProductStrategy name="STRATEGY_SONIFICATION">
+        <AttributesGroup streamType="AUDIO_STREAM_RING" volumeGroup="ring">
+            <Attributes> <Usage value="AUDIO_USAGE_NOTIFICATION_TELEPHONY_RINGTONE"/> </Attributes>
+        </AttributesGroup>
+        <AttributesGroup streamType="AUDIO_STREAM_ALARM" volumeGroup="alarm">
+            <Attributes> <Usage value="AUDIO_USAGE_ALARM"/> </Attributes>
+        </AttributesGroup>
+    </ProductStrategy>
+
+    <ProductStrategy name="STRATEGY_ENFORCED_AUDIBLE">
+        <AttributesGroup streamType="AUDIO_STREAM_ENFORCED_AUDIBLE" volumeGroup="enforced_audible">
+            <Attributes> <Flags value="AUDIO_FLAG_AUDIBILITY_ENFORCED"/> </Attributes>
+        </AttributesGroup>
+    </ProductStrategy>
+
+    <ProductStrategy name="STRATEGY_ACCESSIBILITY">
+        <AttributesGroup streamType="AUDIO_STREAM_ACCESSIBILITY" volumeGroup="accessibility">
+            <Attributes> <Usage value="AUDIO_USAGE_ASSISTANCE_ACCESSIBILITY"/> </Attributes>
+        </AttributesGroup>
+    </ProductStrategy>
+
+    <ProductStrategy name="STRATEGY_SONIFICATION_RESPECTFUL">
+        <AttributesGroup streamType="AUDIO_STREAM_NOTIFICATION" volumeGroup="notification">
+            <Attributes> <Usage value="AUDIO_USAGE_NOTIFICATION"/> </Attributes>
+            <Attributes> <Usage value="AUDIO_USAGE_NOTIFICATION_EVENT"/> </Attributes>
+        </AttributesGroup>
+    </ProductStrategy>
+
+    <ProductStrategy name="STRATEGY_MEDIA">
+        <AttributesGroup streamType="AUDIO_STREAM_ASSISTANT" volumeGroup="assistant">
+            <Attributes>
+                <ContentType value="AUDIO_CONTENT_TYPE_SPEECH"/>
+                <Usage value="AUDIO_USAGE_ASSISTANT"/>
+            </Attributes>
+        </AttributesGroup>
+         <AttributesGroup streamType="AUDIO_STREAM_MUSIC" volumeGroup="music">
+            <Attributes> <Usage value="AUDIO_USAGE_MEDIA"/> </Attributes>
+            <Attributes> <Usage value="AUDIO_USAGE_GAME"/> </Attributes>
+            <Attributes> <Usage value="AUDIO_USAGE_ASSISTANT"/> </Attributes>
+            <Attributes> <Usage value="AUDIO_USAGE_ASSISTANCE_NAVIGATION_GUIDANCE"/> </Attributes>
+            <Attributes/>
+        </AttributesGroup>
+        <AttributesGroup streamType="AUDIO_STREAM_SYSTEM" volumeGroup="system">
+            <Attributes> <Usage value="AUDIO_USAGE_ASSISTANCE_SONIFICATION"/> </Attributes>
+        </AttributesGroup>
+    </ProductStrategy>
+
+    <ProductStrategy name="STRATEGY_DTMF">
+        <AttributesGroup streamType="AUDIO_STREAM_DTMF" volumeGroup="dtmf">
+            <Attributes> <Usage value="AUDIO_USAGE_VOICE_COMMUNICATION_SIGNALLING"/> </Attributes>
+        </AttributesGroup>
+    </ProductStrategy>
+
+    <!-- Used to identify the volume of audio streams exclusively transmitted through the  speaker
+         (TTS) of the device -->
+    <ProductStrategy name="STRATEGY_TRANSMITTED_THROUGH_SPEAKER">
+        <AttributesGroup streamType="AUDIO_STREAM_TTS" volumeGroup="tts">
+            <Attributes> <Flags value="AUDIO_FLAG_BEACON"/> </Attributes>
+        </AttributesGroup>
+    </ProductStrategy>
+
+</ProductStrategies>
+
+<volumeGroups>
+    <volumeGroup>
+        <name>voice_call</name>
+        <indexMin>1</indexMin>
+        <indexMax>7</indexMax>
+        <volume deviceCategory="DEVICE_CATEGORY_HEADSET">
+            <point>0,-4200</point>
+            <point>33,-2800</point>
+            <point>66,-1400</point>
+            <point>100,0</point>
+        </volume>
+        <volume deviceCategory="DEVICE_CATEGORY_SPEAKER">
+            <point>0,-2400</point>
+            <point>33,-1600</point>
+            <point>66,-800</point>
+            <point>100,0</point>
+        </volume>
+        <volume deviceCategory="DEVICE_CATEGORY_EARPIECE">
+            <point>0,-2700</point>
+            <point>33,-1800</point>
+            <point>66,-900</point>
+            <point>100,0</point>
+        </volume>
+        <volume deviceCategory="DEVICE_CATEGORY_EXT_MEDIA" ref="DEFAULT_MEDIA_VOLUME_CURVE"/>
+        <volume deviceCategory="DEVICE_CATEGORY_HEARING_AID" ref="DEFAULT_HEARING_AID_VOLUME_CURVE"/>
+    </volumeGroup>
+
+    <volumeGroup>
+        <name>system</name>
+        <indexMin>0</indexMin>
+        <indexMax>7</indexMax>
+        <volume deviceCategory="DEVICE_CATEGORY_HEADSET">
+            <point>1,-3000</point>
+            <point>33,-2600</point>
+            <point>66,-2200</point>
+            <point>100,-1800</point>
+        </volume>
+        <volume deviceCategory="DEVICE_CATEGORY_SPEAKER">
+            <point>1,-5100</point>
+            <point>57,-2800</point>
+            <point>71,-2500</point>
+            <point>85,-2300</point>
+            <point>100,-2100</point>
+        </volume>
+        <!--volume deviceCategory="DEVICE_CATEGORY_SPEAKER" ref="DEFAULT_SYSTEM_VOLUME_CURVE"/-->
+        <volume deviceCategory="DEVICE_CATEGORY_EARPIECE" ref="DEFAULT_SYSTEM_VOLUME_CURVE"/>
+        <volume deviceCategory="DEVICE_CATEGORY_EXT_MEDIA" ref="DEFAULT_DEVICE_CATEGORY_EXT_MEDIA_VOLUME_CURVE"/>
+        <volume deviceCategory="DEVICE_CATEGORY_HEARING_AID" ref="DEFAULT_HEARING_AID_VOLUME_CURVE"/>
+    </volumeGroup>
+
+    <volumeGroup>
+        <name>ring</name>
+        <indexMin>0</indexMin>
+        <indexMax>7</indexMax>
+        <volume deviceCategory="DEVICE_CATEGORY_HEADSET" ref="DEFAULT_DEVICE_CATEGORY_HEADSET_VOLUME_CURVE"/>
+        <volume deviceCategory="DEVICE_CATEGORY_SPEAKER" ref="DEFAULT_DEVICE_CATEGORY_SPEAKER_VOLUME_CURVE"/>
+        <volume deviceCategory="DEVICE_CATEGORY_EARPIECE" ref="DEFAULT_DEVICE_CATEGORY_EARPIECE_VOLUME_CURVE"/>
+        <volume deviceCategory="DEVICE_CATEGORY_EXT_MEDIA" ref="DEFAULT_DEVICE_CATEGORY_EXT_MEDIA_VOLUME_CURVE"/>
+        <volume deviceCategory="DEVICE_CATEGORY_HEARING_AID" ref="DEFAULT_HEARING_AID_VOLUME_CURVE"/>
+    </volumeGroup>
+
+    <volumeGroup>
+        <name>music</name>
+        <indexMin>0</indexMin>
+        <indexMax>25</indexMax>
+        <volume deviceCategory="DEVICE_CATEGORY_HEADSET" ref="DEFAULT_MEDIA_VOLUME_CURVE"/>
+        <volume deviceCategory="DEVICE_CATEGORY_SPEAKER" ref="DEFAULT_DEVICE_CATEGORY_SPEAKER_VOLUME_CURVE"/>
+        <volume deviceCategory="DEVICE_CATEGORY_EARPIECE" ref="DEFAULT_MEDIA_VOLUME_CURVE"/>
+        <volume deviceCategory="DEVICE_CATEGORY_EXT_MEDIA" ref="DEFAULT_MEDIA_VOLUME_CURVE"/>
+        <volume deviceCategory="DEVICE_CATEGORY_HEARING_AID" ref="DEFAULT_HEARING_AID_VOLUME_CURVE"/>
+    </volumeGroup>
+
+    <volumeGroup>
+        <name>alarm</name>
+        <indexMin>1</indexMin>
+        <indexMax>7</indexMax>
+        <volume deviceCategory="DEVICE_CATEGORY_HEADSET" ref="DEFAULT_NON_MUTABLE_HEADSET_VOLUME_CURVE"/>
+        <volume deviceCategory="DEVICE_CATEGORY_SPEAKER" ref="DEFAULT_NON_MUTABLE_SPEAKER_VOLUME_CURVE"/>
+        <volume deviceCategory="DEVICE_CATEGORY_EARPIECE" ref="DEFAULT_NON_MUTABLE_EARPIECE_VOLUME_CURVE"/>
+        <volume deviceCategory="DEVICE_CATEGORY_EXT_MEDIA" ref="DEFAULT_NON_MUTABLE_EXT_VOLUME_CURVE"/>
+        <volume deviceCategory="DEVICE_CATEGORY_HEARING_AID" ref="DEFAULT_NON_MUTABLE_HEARING_AID_VOLUME_CURVE"/>
+    </volumeGroup>
+
+    <volumeGroup>
+        <name>notification</name>
+        <indexMin>0</indexMin>
+        <indexMax>7</indexMax>
+        <volume deviceCategory="DEVICE_CATEGORY_HEADSET" ref="DEFAULT_DEVICE_CATEGORY_HEADSET_VOLUME_CURVE"/>
+        <volume deviceCategory="DEVICE_CATEGORY_SPEAKER" ref="DEFAULT_DEVICE_CATEGORY_SPEAKER_SYSTEM_VOLUME_CURVE"/>
+        <volume deviceCategory="DEVICE_CATEGORY_EARPIECE" ref="DEFAULT_DEVICE_CATEGORY_EARPIECE_VOLUME_CURVE"/>
+        <volume deviceCategory="DEVICE_CATEGORY_EXT_MEDIA" ref="DEFAULT_DEVICE_CATEGORY_EXT_MEDIA_VOLUME_CURVE"/>
+        <volume deviceCategory="DEVICE_CATEGORY_HEARING_AID" ref="DEFAULT_DEVICE_CATEGORY_HEADSET_VOLUME_CURVE"/>
+    </volumeGroup>
+
+    <volumeGroup>
+        <name>bluetooth_sco</name>
+        <indexMin>0</indexMin>
+        <indexMax>15</indexMax>
+        <volume deviceCategory="DEVICE_CATEGORY_HEADSET">
+            <point>0,-4200</point>
+            <point>33,-2800</point>
+            <point>66,-1400</point>
+            <point>100,0</point>
+        </volume>
+        <volume deviceCategory="DEVICE_CATEGORY_SPEAKER">
+            <point>0,-2400</point>
+            <point>33,-1600</point>
+            <point>66,-800</point>
+            <point>100,0</point>
+        </volume>
+        <volume deviceCategory="DEVICE_CATEGORY_EARPIECE">
+            <point>0,-4200</point>
+            <point>33,-2800</point>
+            <point>66,-1400</point>
+            <point>100,0</point>
+        </volume>
+        <volume deviceCategory="DEVICE_CATEGORY_EXT_MEDIA" ref="DEFAULT_MEDIA_VOLUME_CURVE"/>
+        <volume deviceCategory="DEVICE_CATEGORY_HEARING_AID" ref="DEFAULT_HEARING_AID_VOLUME_CURVE"/>
+    </volumeGroup>
+
+    <volumeGroup>
+        <name>enforced_audible</name>
+        <indexMin>0</indexMin>
+        <indexMax>7</indexMax>
+        <volume deviceCategory="DEVICE_CATEGORY_HEADSET">
+            <point>1,-3000</point>
+            <point>33,-2600</point>
+            <point>66,-2200</point>
+            <point>100,-1800</point>
+        </volume>
+        <volume deviceCategory="DEVICE_CATEGORY_SPEAKER">
+            <point>1,-3400</point>
+            <point>71,-2400</point>
+            <point>100,-2000</point>
+        </volume>
+        <!--volume deviceCategory="DEVICE_CATEGORY_SPEAKER" ref="DEFAULT_SYSTEM_VOLUME_CURVE"/-->
+        <volume deviceCategory="DEVICE_CATEGORY_EARPIECE" ref="DEFAULT_SYSTEM_VOLUME_CURVE"/>
+        <volume deviceCategory="DEVICE_CATEGORY_EXT_MEDIA" ref="DEFAULT_DEVICE_CATEGORY_EXT_MEDIA_VOLUME_CURVE"/>
+        <volume deviceCategory="DEVICE_CATEGORY_HEARING_AID" ref="DEFAULT_HEARING_AID_VOLUME_CURVE"/>
+    </volumeGroup>
+
+    <volumeGroup>
+        <name>dtmf</name>
+        <indexMin>0</indexMin>
+        <indexMax>15</indexMax>
+        <volume deviceCategory="DEVICE_CATEGORY_HEADSET">
+            <point>1,-3000</point>
+            <point>33,-2600</point>
+            <point>66,-2200</point>
+            <point>100,-1800</point>
+        </volume>
+        <volume deviceCategory="DEVICE_CATEGORY_SPEAKER">
+            <point>1,-4000</point>
+            <point>71,-2400</point>
+            <point>100,-1400</point>
+        </volume>
+        <!--volume deviceCategory="DEVICE_CATEGORY_SPEAKER" ref="DEFAULT_SYSTEM_VOLUME_CURVE"/-->
+        <volume deviceCategory="DEVICE_CATEGORY_EARPIECE" ref="DEFAULT_SYSTEM_VOLUME_CURVE"/>
+        <volume deviceCategory="DEVICE_CATEGORY_EXT_MEDIA" ref="DEFAULT_DEVICE_CATEGORY_EXT_MEDIA_VOLUME_CURVE"/>
+        <volume deviceCategory="DEVICE_CATEGORY_HEARING_AID" ref="DEFAULT_HEARING_AID_VOLUME_CURVE"/>
+    </volumeGroup>
+
+    <volumeGroup>
+        <name>tts</name>
+        <indexMin>0</indexMin>
+        <indexMax>15</indexMax>
+        <volume deviceCategory="DEVICE_CATEGORY_HEADSET" ref="SILENT_VOLUME_CURVE"/>
+        <volume deviceCategory="DEVICE_CATEGORY_SPEAKER" ref="FULL_SCALE_VOLUME_CURVE"/>
+        <volume deviceCategory="DEVICE_CATEGORY_EARPIECE" ref="SILENT_VOLUME_CURVE"/>
+        <volume deviceCategory="DEVICE_CATEGORY_EXT_MEDIA" ref="SILENT_VOLUME_CURVE"/>
+        <volume deviceCategory="DEVICE_CATEGORY_HEARING_AID" ref="SILENT_VOLUME_CURVE"/>
+    </volumeGroup>
+
+    <volumeGroup>
+        <name>accessibility</name>
+        <indexMin>1</indexMin>
+        <indexMax>15</indexMax>
+        <volume deviceCategory="DEVICE_CATEGORY_HEADSET" ref="DEFAULT_NON_MUTABLE_VOLUME_CURVE"/>
+        <volume deviceCategory="DEVICE_CATEGORY_SPEAKER" ref="DEFAULT_NON_MUTABLE_SPEAKER_VOLUME_CURVE"/>
+        <volume deviceCategory="DEVICE_CATEGORY_EARPIECE" ref="DEFAULT_NON_MUTABLE_VOLUME_CURVE"/>
+        <volume deviceCategory="DEVICE_CATEGORY_EXT_MEDIA" ref="DEFAULT_NON_MUTABLE_VOLUME_CURVE"/>
+        <volume deviceCategory="DEVICE_CATEGORY_HEARING_AID" ref="DEFAULT_NON_MUTABLE_HEARING_AID_VOLUME_CURVE"/>
+    </volumeGroup>
+    <volumeGroup>
+        <name>assistant</name>
+        <indexMin>0</indexMin>
+        <indexMax>15</indexMax>
+        <volume deviceCategory="DEVICE_CATEGORY_HEADSET" ref="DEFAULT_MEDIA_VOLUME_CURVE"/>
+        <volume deviceCategory="DEVICE_CATEGORY_SPEAKER" ref="DEFAULT_DEVICE_CATEGORY_SPEAKER_VOLUME_CURVE"/>
+        <volume deviceCategory="DEVICE_CATEGORY_EARPIECE" ref="DEFAULT_MEDIA_VOLUME_CURVE"/>
+        <volume deviceCategory="DEVICE_CATEGORY_EXT_MEDIA" ref="DEFAULT_MEDIA_VOLUME_CURVE"/>
+        <volume deviceCategory="DEVICE_CATEGORY_HEARING_AID" ref="DEFAULT_HEARING_AID_VOLUME_CURVE"/>
+    </volumeGroup>
+
+</volumeGroups>
+
+<volumes>
+    <reference name="FULL_SCALE_VOLUME_CURVE">
+    <!-- Full Scale reference Volume Curve -->
+        <point>0,0</point>
+        <point>100,0</point>
+    </reference>
+    <reference name="SILENT_VOLUME_CURVE">
+        <point>0,-9600</point>
+        <point>100,-9600</point>
+    </reference>
+    <reference name="DEFAULT_SYSTEM_VOLUME_CURVE">
+    <!-- Default System reference Volume Curve -->
+        <point>1,-2400</point>
+        <point>33,-1800</point>
+        <point>66,-1200</point>
+        <point>100,-600</point>
+    </reference>
+    <reference name="DEFAULT_MEDIA_VOLUME_CURVE">
+    <!-- Default Media reference Volume Curve -->
+        <point>1,-5800</point>
+        <point>20,-4000</point>
+        <point>60,-1700</point>
+        <point>100,0</point>
+    </reference>
+    <reference name="DEFAULT_DEVICE_CATEGORY_HEADSET_VOLUME_CURVE">
+    <!--Default Volume Curve -->
+        <point>1,-4950</point>
+        <point>33,-3350</point>
+        <point>66,-1700</point>
+        <point>100,0</point>
+    </reference>
+    <reference name="DEFAULT_DEVICE_CATEGORY_SPEAKER_VOLUME_CURVE">
+    <!-- Default is Speaker Media Volume Curve -->
+        <point>1,-5800</point>
+        <point>20,-4000</point>
+        <point>60,-1700</point>
+        <point>100,0</point>
+    </reference>
+    <reference name="DEFAULT_DEVICE_CATEGORY_SPEAKER_SYSTEM_VOLUME_CURVE">
+    <!-- Default is Speaker System Volume Curve -->
+        <point>1,-4680</point>
+        <point>42,-2070</point>
+        <point>85,-540</point>
+        <point>100,0</point>
+    </reference>
+    <reference name="DEFAULT_DEVICE_CATEGORY_EARPIECE_VOLUME_CURVE">
+    <!--Default Volume Curve -->
+        <point>1,-4950</point>
+        <point>33,-3350</point>
+        <point>66,-1700</point>
+        <point>100,0</point>
+    </reference>
+    <reference name="DEFAULT_DEVICE_CATEGORY_EXT_MEDIA_VOLUME_CURVE">
+    <!-- Default is Ext Media System Volume Curve -->
+        <point>1,-5800</point>
+        <point>20,-4000</point>
+        <point>60,-2100</point>
+        <point>100,-1000</point>
+    </reference>
+    <reference name="DEFAULT_HEARING_AID_VOLUME_CURVE">
+    <!-- Default Hearing Aid Volume Curve -->
+        <point>1,-12700</point>
+        <point>20,-8000</point>
+        <point>60,-4000</point>
+        <point>100,0</point>
+    </reference>
+    <!-- **************************************************************** -->
+    <!-- Non-mutable default volume curves:                               -->
+    <!--     * first point is always for index 0                          -->
+    <!--     * attenuation is small enough that stream can still be heard -->
+    <reference name="DEFAULT_NON_MUTABLE_VOLUME_CURVE">
+    <!-- Default non-mutable reference Volume Curve -->
+    <!--        based on DEFAULT_MEDIA_VOLUME_CURVE -->
+        <point>0,-5800</point>
+        <point>20,-4000</point>
+        <point>60,-1700</point>
+        <point>100,0</point>
+    </reference>
+    <reference name="DEFAULT_NON_MUTABLE_HEADSET_VOLUME_CURVE">
+    <!--Default non-mutable Volume Curve for headset -->
+    <!--    based on DEFAULT_DEVICE_CATEGORY_HEADSET_VOLUME_CURVE -->
+        <point>0,-4950</point>
+        <point>33,-3350</point>
+        <point>66,-1700</point>
+        <point>100,0</point>
+    </reference>
+    <reference name="DEFAULT_NON_MUTABLE_SPEAKER_VOLUME_CURVE">
+    <!-- Default non-mutable Speaker Volume Curve -->
+    <!--    based on DEFAULT_DEVICE_CATEGORY_SPEAKER_VOLUME_CURVE -->
+        <point>0,-5800</point>
+        <point>20,-4000</point>
+        <point>60,-1700</point>
+        <point>100,0</point>
+    </reference>
+    <reference name="DEFAULT_NON_MUTABLE_EARPIECE_VOLUME_CURVE">
+    <!--Default non-mutable Volume Curve -->
+    <!--    based on DEFAULT_DEVICE_CATEGORY_EARPIECE_VOLUME_CURVE -->
+        <point>0,-4950</point>
+        <point>33,-3350</point>
+        <point>66,-1700</point>
+        <point>100,0</point>
+    </reference>
+    <reference name="DEFAULT_NON_MUTABLE_EXT_VOLUME_CURVE">
+    <!-- Default non-mutable Ext Media System Volume Curve -->
+    <!--     based on DEFAULT_DEVICE_CATEGORY_EXT_MEDIA_VOLUME_CURVE -->
+        <point>0,-5800</point>
+        <point>20,-4000</point>
+        <point>60,-2100</point>
+        <point>100,-1000</point>
+    </reference>
+    <reference name="DEFAULT_NON_MUTABLE_HEARING_AID_VOLUME_CURVE">
+    <!-- Default non-mutable Hearing Aid Volume Curve -->
+    <!--     based on DEFAULT_HEARING_AID_VOLUME_CURVE -->
+        <point>0,-12700</point>
+        <point>20,-8000</point>
+        <point>60,-4000</point>
+        <point>100,0</point>
+    </reference>
+</volumes>
+
+</configuration>
+APMENGINE
+        chown -R 0:0 "$AEV/up" && find "$AEV/up" -type d -exec chmod 755 {} + && find "$AEV/up" -type f -exec chmod 644 {} +
+        $BB chcon -R u:object_r:vendor_configs_file:s0 "$AEV/up" 2>/dev/null || true
+        if [ -s "$AEV/up/audio_policy_engine_configuration.xml" ] &&
+           $BB mount -t overlay overlay -o "ro,lowerdir=$AEV/up:$ROOTFS/vendor/etc" "$ROOTFS/vendor/etc"; then
+            echo "Guest audio volume: AOSP volume curves at vendor/etc/audio_policy_engine_configuration.xml (software attenuation; the slider gets steps)"
+        else
+            echo "!!! WARNING: guest audio volume: the overlay on vendor/etc was refused; the guest keeps AOSP's flat built-in curves (volume stays binary)"
+        fi
+    fi
+fi
 # Nothing OS's own sounds: the ringtones of "Nothing Signals" (01_crossing ..
 # 10_clwb), notifications, alarms and the UI sounds (camera click, ...) ship in
 # Nothing's vendor image under product/media/audio, which its init lays over
