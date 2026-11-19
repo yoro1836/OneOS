@@ -94,8 +94,24 @@ test('a member signs in through the bot and sends a report; the record and the p
   const key = [...e.REPORTS.m.keys()].find((k) => k.startsWith('report:'))
   const stored = JSON.parse(await e.REPORTS.get(key))
   assert.deepEqual(stored.tg, { id: 42, username: 'tester_one' })
+  // A new account's report is held: stored, not posted, for its first two days (11-18 flood).
+  assert.equal(stored.held, true)
+  assert.ok(!tgCalls.some((x) => x.method === 'sendMessage' && x.body.chat_id === '-1001'), 'no ping for a new account')
+  // Two days after its first sign-in it is posted.
+  await e.REPORTS.put('seen:42', String(Date.now() - 3 * 24 * 3600 * 1000))
+  const r2 = await call(e, 'POST', '/v1/report', { body: rec({ reportId: '8aea312c31b8821d-3f2b' }), headers: { ...up, 'x-oneos-pass': got.pass }, c })
+  assert.equal(r2.status, 200)
   const ping = tgCalls.find((x) => x.method === 'sendMessage' && x.body.chat_id === '-1001')
   assert.match(ping.body.text, /From: @tester_one/)
+})
+
+test('five reports a day from one account, the sixth refused', async () => {
+  const e = env()
+  const { pass } = await signIn(e)
+  const h = { ...up, 'x-oneos-pass': pass }
+  const codes = []
+  for (let i = 0; i < 6; i++) codes.push((await call(e, 'POST', '/v1/report', { body: rec({ reportId: `dddddddddddddddd-${String(i).padStart(4, '0')}`, sessionId: 'dddddddddddddddd' }), headers: h })).status)
+  assert.deepEqual(codes, [200, 200, 200, 200, 200, 429])
 })
 
 test('a banned account and one that never joined are refused with the group link; joining works at once', async () => {
@@ -179,12 +195,39 @@ test('one account: 3 reports a minute, more refused; past 15 tries it is banned,
   for (let i = 0; i < 15; i++) codes.push((await sent(i)).status)
   assert.deepEqual(codes.slice(0, 4), [200, 200, 200, 429])
   assert.ok(!tgCalls.some((c) => c.method === 'banChatMember'), 'no ban within 15 tries')
-  const writes = [...e.REPORTS.m.keys()].filter((k) => !k.startsWith('report:') && !k.startsWith('member:'))
-  assert.deepEqual(writes, [], 'no counters in KV')
+  // Only the first-sign-in time and the day's count besides the reports (D1 in production).
+  const writes = [...e.REPORTS.m.keys()].filter((k) => !k.startsWith('report:') && !k.startsWith('member:') && !k.startsWith('seen:') && !k.startsWith('day:'))
+  assert.deepEqual(writes, [], 'no other counters')
   assert.equal((await sent(15)).status, 403)
   assert.equal(tgCalls.find((c) => c.method === 'banChatMember').body.user_id, 42)
   assert.ok(tgCalls.some((c) => c.method === 'sendMessage' && /banned from the group/.test(c.body.text) && c.body.message_thread_id === 6))
   assert.equal(e.REPORTS.m.has('banned:42'), true)
   assert.equal((await sent(16)).status, 403)
   assert.equal(tgCalls.filter((c) => c.method === 'banChatMember').length, 1)
+})
+
+test('a join request goes to the group creator with its signals and buttons; only the creator can approve', async () => {
+  const e = env()
+  const orig = globalThis.fetch
+  globalThis.fetch = async (url, init) => {
+    const method = String(url).split('/').pop()
+    const body = JSON.parse(init.body)
+    if (method === 'getChatAdministrators') { tgCalls.push({ method, body }); return Response.json({ ok: true, result: [{ status: 'creator', user: { id: 500 } }] }) }
+    if (method === 'getUserProfilePhotos') { tgCalls.push({ method, body }); return Response.json({ ok: true, result: { total_count: 0 } }) }
+    return orig(url, init)
+  }
+  const hook = { 'x-telegram-bot-api-secret-token': 'hook-key' }
+  const jr = JSON.stringify({ update_id: 2, chat_join_request: { chat: { id: -1001 }, from: { id: 8832741362, first_name: 'X', username: 'gducufu' }, date: 1 } })
+  assert.equal((await call(e, 'POST', '/v1/tg', { body: jr, headers: hook })).status, 200)
+  const dm = tgCalls.find((c) => c.method === 'sendMessage' && c.body.chat_id === 500)
+  assert.match(dm.body.text, /likely throwaway/)
+  assert.match(dm.body.text, /no profile photo/)
+  assert.deepEqual(dm.body.reply_markup.inline_keyboard[0].map((b) => b.callback_data), ['jr:a:8832741362', 'jr:d:8832741362'])
+  // Someone else pressing the button does nothing.
+  const cb = (from) => JSON.stringify({ update_id: 3, callback_query: { id: 'q', from: { id: from }, data: 'jr:d:8832741362', message: { message_id: 7, chat: { id: 500 }, text: 'x' } } })
+  await call(e, 'POST', '/v1/tg', { body: cb(42), headers: hook })
+  assert.ok(!tgCalls.some((c) => c.method === 'declineChatJoinRequest'))
+  await call(e, 'POST', '/v1/tg', { body: cb(500), headers: hook })
+  assert.equal(tgCalls.find((c) => c.method === 'declineChatJoinRequest').body.user_id, 8832741362)
+  assert.ok(tgCalls.some((c) => c.method === 'editMessageText' && /Declined by you/.test(c.body.text)))
 })

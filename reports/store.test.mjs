@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { DatabaseSync } from 'node:sqlite'
 import { store, SCHEMA, CHUNK } from './store.js'
-import worker from './worker.js'
+import worker, { budget, sweep } from './worker.js'
 
 // D1's prepare/bind/first/all/run/batch over SQLite; BLOBs come back as ArrayBuffer, as D1 gives them.
 export class FakeD1 {
@@ -79,24 +79,16 @@ test('expired values are gone; lists page with a cursor and keep to their prefix
   assert.ok(names.every((n) => n.startsWith('report:')))
 })
 
-test('what is left in the old KV namespace is read, listed after D1 and deleted; nothing is written there', async () => {
+test('with D1 the old KV namespace is never touched: not read, listed, deleted or written', async () => {
   const kv = new FakeKV()
   await kv.put('report:2026-11-15T10:00:00.000Z:old-0001', '{"old":true}')
   const s = store({ DB: new FakeD1(), REPORTS: kv })
   await s.put('report:2026-11-16T10:00:00.000Z:new-0001', '{"new":true}')
-  assert.equal(await s.get('report:2026-11-15T10:00:00.000Z:old-0001'), '{"old":true}')
-  const names = []
-  let cursor
-  do {
-    const r = await s.list({ prefix: 'report:', cursor, limit: 1 })
-    names.push(...r.keys.map((k) => k.name))
-    cursor = r.list_complete ? undefined : r.cursor
-  } while (cursor)
-  assert.deepEqual(names, ['report:2026-11-16T10:00:00.000Z:new-0001', 'report:2026-11-15T10:00:00.000Z:old-0001'])
+  assert.equal(await s.get('report:2026-11-15T10:00:00.000Z:old-0001'), null)
+  const r = await s.list({ prefix: 'report:' })
+  assert.deepEqual(r.keys.map((k) => k.name), ['report:2026-11-16T10:00:00.000Z:new-0001'])
   await s.delete('report:2026-11-15T10:00:00.000Z:old-0001')
-  assert.equal(kv.m.size, 0)
-  await s.put('signin:zzz', '{}')
-  assert.equal(kv.m.size, 0, 'writes go to D1 only')
+  assert.equal(kv.m.size, 1, 'the old namespace is left alone')
 })
 
 test('the worker on D1: a report with a 3 MB log part is taken and collected', async () => {
@@ -117,4 +109,45 @@ test('the worker on D1: a report with a 3 MB log part is taken and collected', a
   } finally {
     globalThis.fetch = realFetch
   }
+})
+
+test('log parts go to KV (streamed, no CPU spent copying), records to D1', async () => {
+  const kv = new FakeKV()
+  const db = new FakeD1()
+  const s = store({ DB: db, REPORTS: kv })
+  await s.put('part:abc-0001:0', 'logbytes')
+  await s.put('report:2026-11-18T10:00:00.000Z:abc-0001', '{"r":1}')
+  assert.equal(kv.m.has('part:abc-0001:0'), true)
+  assert.equal(kv.m.has('report:2026-11-18T10:00:00.000Z:abc-0001'), false)
+  assert.equal(await s.get('part:abc-0001:0'), 'logbytes')
+  assert.deepEqual((await s.list({ prefix: 'part:' })).keys.map((k) => k.name), ['part:abc-0001:0'])
+  await s.delete('part:abc-0001:0')
+  assert.equal(kv.m.size, 0)
+})
+
+test('budget: log parts stop at the daily cap (KV write limit), told to come back later', async () => {
+  const db = new FakeD1()
+  const e = { DB: db, REPORTS: new FakeKV() }
+  const day = new Date().toISOString().slice(0, 10)
+  const s = store(e)
+  await s.put(`warned:${day}`, '1') // no Telegram call in the test
+  await budget(e, 1000)
+  assert.deepEqual(JSON.parse(await s.get(`budget:${day}`)), { n: 1, b: 1000 })
+  await s.put(`budget:${day}`, JSON.stringify({ n: 700, b: 5000 }))
+  await assert.rejects(budget(e, 1000), (err) => err.status === 503)
+  // Bytes: today + yesterday stay under 800 MB.
+  await s.put(`budget:${day}`, JSON.stringify({ n: 1, b: 799 * 1024 * 1024 }))
+  await assert.rejects(budget(e, 2 * 1024 * 1024), (err) => err.status === 503)
+})
+
+test('sweep: leftover parts older than 6 hours go, newer ones stay', async () => {
+  const now = Date.now() / 1000
+  const keys = [
+    { name: 'part:old-0001:0', expiration: Math.floor(now + 2 * 86400 - 7 * 3600) },
+    { name: 'part:new-0001:0', expiration: Math.floor(now + 2 * 86400 - 3600) },
+  ]
+  const gone = []
+  const kv = { list: async () => ({ keys, list_complete: true }), delete: async (k) => { gone.push(k) } }
+  await sweep({ REPORTS: kv, DB: new FakeD1() })
+  assert.deepEqual(gone, ['part:old-0001:0'])
 })

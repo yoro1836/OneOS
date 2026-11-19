@@ -59,7 +59,7 @@ val packageSets: Map<String, Pair<File, List<String>>> = linkedMapOf(
     // Find X9 Ultra IN image (0.3.3-0.3.6, again from 0.4.11), the bar phones:
     // the CN set's files (shared by hash) and its cell broadcast module.
     // 0.5.02: the newer Find X9 Ultra IN build (CPH2841IN, 2026-11-01), offered next to the older one.
-    "x9u-in-1105-sultra" to (File(repoRoot, "out/overlays_x9u_in_1105_r2") to listOf("tethering_payload.img", "OneOSWallpapersFoldGrid.apk")),
+    "x9u-in-1105-sultra" to (File(repoRoot, "out/overlays_x9u_in_1105_r5") to listOf("tethering_payload.img", "OneOSWallpapersFoldGrid.apk")),
     // Pixel 11 Fold image (0.3.7), Z Fold (F8U): everything a Pixel session uses,
     // OneOSGuest.apk included, and the fold hinge (scripts/make-fold8-pixel.py --variant f8u).
     "pixel-f8u" to (File(repoRoot, "out/overlays_pixel_f8u_r19") to listOf("tethering_payload.img")),
@@ -76,7 +76,7 @@ val packageSets: Map<String, Pair<File, List<String>>> = linkedMapOf(
     "hyper-f8u" to (File(repoRoot, "out/overlays_hyperos_r28") to listOf("tethering_payload.img")),
     // Nothing OS 5.0 (0.4.33), the Z Fold8 Ultra only: its chips need SVE/SME.
     "nothing-f8u" to (File(repoRoot, "out/overlays_nothing_r38") to listOf("tethering_payload.img")),
-    "nothing-a" to (File(repoRoot, "out/overlays_nothing_a_r5") to listOf("tethering_payload.img")),
+    "nothing-a" to (File(repoRoot, "out/overlays_nothing_a_r6") to listOf("tethering_payload.img")),
     // OxygenOS 16 (0.4.67, experimental), for the phones on One UI 8 (Android 16): no fold overlays, no
     // tethering (One UI's stays), no apex requirement list (no ColorOS set ships one).
     "oxygen16" to (File(repoRoot, "out/overlays_oxygen16_r3") to listOf("tethering_payload.img", "OneOSWallpapersFoldGrid.apk",
@@ -86,7 +86,9 @@ val packageSets: Map<String, Pair<File, List<String>>> = linkedMapOf(
     // LineageOS 24 (0.5.06, experimental): the OnePlus 15 nightly, on every phone that offers Infinity-X. No gmssystem
     // payload (One UI's Google apps are laid over the guest at session time). Tethering never mounts; its source-built
     // cellbroadcast module is left out like Infinity-X's.
-    "lineage" to (File(repoRoot, "out/overlays_lineage_r7") to listOf("tethering_payload.img", "cellbroadcast_payload.img")),
+    "lineage" to (File(repoRoot, "out/overlays_lineage_r8") to listOf("tethering_payload.img", "cellbroadcast_payload.img")),
+    // One UI 9.5 (0.5.22, untested): the Galaxy S26 Ultra build, on the phones on One UI 9. Tethering never mounts.
+    "oneui95" to (File(repoRoot, "out/overlays_oneui95_r1") to listOf("tethering_payload.img")),
 )
 // The series downloads (0.4.25): -Poneos.series=<id> packs only the sets that
 // app-android/packages/series.txt lists for it (ApkSeries keeps the same lists,
@@ -368,7 +370,7 @@ abstract class OneOsFilesTask : DefaultTask() {
             require(Regex("[A-Za-z0-9][A-Za-z0-9_-]*/[A-Za-z0-9][A-Za-z0-9_.-]*").matches(source["repository"] as String))
             require(Regex("[a-z0-9][a-z0-9.-]{0,39}").matches(source["tag"] as String))
             val targets = source["targets"] as List<*>
-            require(targets.isNotEmpty() && targets.distinct().size == targets.size)
+            require((source["discover"] == true || targets.isNotEmpty()) && targets.distinct().size == targets.size)
             for (value in targets) {
                 val target = value as Map<*, *>
                 require(listOf(target["profile"], target["image"], target["set"]) in pairs) { "Unsupported patch target: $target" }
@@ -534,8 +536,8 @@ android {
         // 0.5.00 (129, published 11-13): every system on the S23 family (SM8550, HIDL audio HAL) plays A2DP through
         // the vendor's Bluetooth module with offload off, as One UI does; 0.4.99's bridge got the session but the
         // offload path failed with -38 (ColorOS 7eeafc87, 5528e31a; Pixel e353ca45). Not tried yet.
-        versionCode = 152
-        versionName = "0.5.19"
+        versionCode = 165
+        versionName = "0.5.22"
         // 0.4.56 (73), TEST CHANNEL ONLY: the Find N6 set's Theme Store logs every OkHttp request and reply (n6g_r7,
         // patches/theme_store_netlog.py) for the owner's "No Data" log; the next public build goes back to n6g_r6.
         // Send to the OneOS team (0.4.29, both editions): the report service's

@@ -824,7 +824,11 @@ fi
 # their names are not confirmed from an S23 Ultra (the Fold8 has none of the
 # four), and a name One UI lacks is left out as always. If the picture still
 # fails there, the dlopen line names the next library.
-SAMCAM_JNI="libAEBHDR_wrapper.camera.samsung.so libAIQSolution_MPI.camera.samsung.so libAIQSolution_MPISingleRGB40.camera.samsung.so \
+# libDLInterface_aidl (0.5.20): video recording loads it (with libsnap_aidl and the snap HAL's NDK
+# interface, which it links) and aborts without it: "Dynamic loading of libDLInterface failed"
+# (A36 ColorOS, photo fine, video closed the camera).
+SAMCAM_JNI="libDLInterface_aidl.camera.samsung.so libsnap_aidl.snap.samsung.so vendor.samsung.hardware.snap-V3-ndk.so \
+    libAEBHDR_wrapper.camera.samsung.so libAIQSolution_MPI.camera.samsung.so libAIQSolution_MPISingleRGB40.camera.samsung.so \
     libDeflickerHDR.camera.samsung.so libDocMagnetEngine.camera.samsung.so \
     libDocRectifyWrapper.camera.samsung.so libDualCamBokehCapture.camera.samsung.so \
     libEventDetector.camera.samsung.so libFaceRestoration.camera.samsung.so libFoodDetector.camera.samsung.so \
@@ -2739,6 +2743,37 @@ apm_copy() {
     [ -s "$2" ]
 }
 
+# apm_variants <copy> binds the guest's policy copy over the Bluetooth-offload
+# variants of the policy file that this phone's vendor ships. AOSP's
+# audio_get_audio_policy_config_file() (and Xiaomi's loader) takes
+# audio_policy_configuration_le_offload_disabled.xml (or the a2dp_offload_disabled
+# / bluetooth_legacy_hal one) before the plain name when the Bluetooth offload
+# props ask for it. Newer S24 / S24+ firmware has the LE one in /vendor/etc: it
+# is One UI's file, whose volume curves are flat (0 to 0.15 dB: Samsung's HAL
+# sets the volume itself), so Nothing OS, LineageOS and HyperOS played at full
+# volume at any slider position ("Config source: ..._le_offload_disabled.xml",
+# S24+ reports d98f425d, 5d625e0e, 8ca56b25, 61e4af7b), while ColorOS read our
+# copy of the plain file and had working curves (134b27b7). Only variants that
+# exist are covered; One UI's /vendor is not touched (a bind in the guest's view).
+# ONEOS_GUEST_APM_VARIANTS=0 leaves them.
+apm_variants() {
+    [ "${ONEOS_GUEST_APM_VARIANTS:-1}" = 1 ] && [ -s "$1" ] || return 0
+    for v in audio_policy_configuration_le_offload_disabled.xml \
+             audio_policy_configuration_a2dp_offload_disabled.xml \
+             audio_policy_configuration_bluetooth_legacy_hal.xml; do
+        for f in /vendor/etc/$v /vendor/etc/audio/$v; do
+            [ -f "$ROOTFS$f" ] && [ ! -L "$ROOTFS$f" ] || continue
+            mount | grep -q " $ROOTFS$f " && continue
+            if $BB mount --bind "$1" "$ROOTFS$f"; then
+                $BB mount -o remount,ro,bind "$ROOTFS$f" 2>/dev/null || true
+                echo "Guest audio policy: the same copy on $f (read before the plain file when Bluetooth offload is off)"
+            else
+                echo "!!! WARNING: guest audio policy: the bind on $f was refused; the guest may read One UI's file there (volume at its maximum)"
+            fi
+        done
+    done
+}
+
 # HyperOS: Xiaomi's miui-services.jar (recovery, factory resets, preinstall
 # copiers, vold, netd) and apprecovery.proinstaller.jar (installs apps by
 # itself), both on the system server class path, guarded like
@@ -2913,6 +2948,7 @@ if [ -e "$MIUI_FW/miui-services.jar" ] || [ -L "$MIUI_FW/miui-services.jar" ]; t
             if [ -s "$APM_OV/up/audio_policy_configuration_mi.xml" ] &&
                $BB mount -t overlay overlay -o "ro,lowerdir=$APM_OV/up:$ROOTFS$APM_D" "$ROOTFS$APM_D"; then
                 echo "HyperOS audio policy: $APM_X as $APM_D/audio_policy_configuration_mi.xml (no AIDL audio HAL)${APM_NOTE:+; $APM_NOTE}${APM_USB:+; $APM_USB}"
+                apm_variants "$APM_OV/up/audio_policy_configuration_mi.xml"
             else
                 echo "!!! WARNING: HyperOS audio policy: the overlay on $APM_D was refused; HyperOS keeps its default (speaker only, no Bluetooth audio)"
             fi
@@ -2963,6 +2999,7 @@ if [ ! -e "$MIUI_FW/miui-services.jar" ] && [ ! -L "$MIUI_FW/miui-services.jar" 
                 if $BB mount --bind "$GAPM_OV/audio_policy_configuration.xml" "$ROOTFS$GAPM"; then
                     $BB mount -o remount,ro,bind "$ROOTFS$GAPM" 2>/dev/null || true
                     echo "Guest audio policy: $GAPM with $GAPM_SAID (no AIDL audio HAL)"
+                    apm_variants "$GAPM_OV/audio_policy_configuration.xml"
                     case "$APM_NOTE" in
                         *"vendor's Bluetooth module"*)
                             # Software A2DP for the module's stream on Qualcomm (see apm_a2dp).
@@ -3645,10 +3682,22 @@ fi
 # SystemUI and the launcher at start (pixel-f8: Fold8PixelUnfold.apk, which also
 # has the Fold8's 48dp bar and AOD; pixel-f8u: OneOSPixelUnfold.apk, the gates only).
 UNFOLD_RRO=""
+if [ "${ONEOS_PROFILE:-}" = f8 ] && grep -q '^  "image": "infinityx41-findx9u",$' "$STAGE/.oneos_stage"; then
+    UNFOLD_RRO=Fold8InfinityUnfold.apk
+fi
+if [ "${ONEOS_PROFILE:-}" = f8 ] && grep -q '^  "image": "lineage24-infiniti",$' "$STAGE/.oneos_stage"; then
+    UNFOLD_RRO=Fold8LineageUnfold.apk
+fi
 if [ "${ONEOS_PROFILE:-}" = f8 ] && grep -q '^  "set": "pixel-f8",$' "$STAGE/.oneos_stage"; then
     UNFOLD_RRO=Fold8PixelUnfold.apk
 elif [ "${ONEOS_PROFILE:-}" = f8u ] && grep -q '^  "set": "pixel-f8u",$' "$STAGE/.oneos_stage"; then
     UNFOLD_RRO=OneOSPixelUnfold.apk
+fi
+if [ "${ONEOS_PROFILE:-}" = f8 ] && grep -q '^  "image": "\(lineage24-infiniti\|infinityx41-findx9u\)",$' "$STAGE/.oneos_stage" && [ -f "$STAGE/OneOSSettingsSplit.apk" ]; then
+    mkdir -p "$STAGE/oem/overlay" &&
+        cp "$STAGE/OneOSSettingsSplit.apk" "$STAGE/oem/overlay/" &&
+        chmod 644 "$STAGE/oem/overlay/OneOSSettingsSplit.apk" &&
+        OEM_FILES="$OEM_FILES overlay/OneOSSettingsSplit.apk"
 fi
 if [ -n "$UNFOLD_RRO" ] && [ -f "$STAGE/$UNFOLD_RRO" ]; then
     mkdir -p "$STAGE/oem/overlay" &&
@@ -3899,6 +3948,27 @@ if [ "${ONEOS_GUEST_BIOMETRICS:-1}" = 1 ] && grep -q '^# biometric-remove guard'
        [ -e /sys/class/lcd/panel/local_hbm ]; then
         : > "$LFILE" && chown 1000:1000 "$LFILE" && chmod 644 "$LFILE" && $BB chcon u:object_r:system_data_file:s0 "$LFILE" 2>/dev/null
         echo "Guest biometrics: optical sensor with local HBM: the spot and Samsung's touch request on each touch"
+    fi
+    # A guest whose SystemUI never reports the finger (ColorOS: OPPO's panel driver tells OPPO's HAL, which a
+    # Galaxy has not; 0.5.20, A36: the icon did nothing): OneOSFpTouch in services_patched.jar
+    # (guest_fp_touchwatch.py) reads the touch panel. "<evdev node> <max x> <max y> <panel width> <panel height>".
+    TFILE=$STAGE/data/system/oneos_fp_touch
+    rm -f "$TFILE"
+    if [ -f "$LFILE" ] && [ -f "$UFILE" ] && [ -e "$ROOTFS/system/framework/oplus-services.jar" ] &&
+       [ "${ONEOS_GUEST_FP_TOUCHWATCH:-1}" = 1 ]; then
+        TDEV=''
+        for e in /sys/class/input/event*; do
+            case "$(cat "$e/device/name" 2>/dev/null)" in sec_touchscreen|*_touchscreen) TDEV=/dev/input/${e##*/}; break ;; esac
+        done
+        TMAX=$([ -n "$TDEV" ] && getevent -p "$TDEV" 2>/dev/null | awk '$1 == "0035" { for (i = 1; i <= NF; i++) if ($i == "max") x = $(i + 1) }
+            $1 == "0036" { for (i = 1; i <= NF; i++) if ($i == "max") y = $(i + 1) } END { gsub(",", "", x); gsub(",", "", y); if (x > 0 && y > 0) print x, y }')
+        if [ -n "$TMAX" ] && [ -n "$UWH" ]; then
+            echo "$TDEV $TMAX $UWH" > "$TFILE" && chown 1000:1000 "$TFILE" && chmod 644 "$TFILE" &&
+                $BB chcon u:object_r:system_data_file:s0 "$TFILE" 2>/dev/null
+            echo "Guest biometrics: finger on the sensor from the touch panel ($(cat "$TFILE"))"
+        else
+            echo "Guest biometrics: touch panel not found for the sensor watcher (device '$TDEV', range '$TMAX')"
+        fi
     fi
 else
     # No removal guard in this set (or turned off): no copied lists may stay from an earlier stage.
@@ -4595,6 +4665,12 @@ else
 fi
 mkdir -p "$STAGE/data/user/0" "$STAGE/data/user_de/0"
 mkdir -p "$STAGE/data/system/users/0" "$STAGE/data/system_de/0/spblob" "$STAGE/data/system_ce/0"
+# The fingerprint framework sets its active user before vendor code can create
+# this directory. Without it the sensor is registered but never opened.
+mkdir -p "$STAGE/data/vendor_de/0/fpdata"
+chown 1000:1000 "$STAGE/data/vendor_de/0/fpdata" 2>/dev/null || true
+chmod 700 "$STAGE/data/vendor_de/0/fpdata" 2>/dev/null || true
+$BB chcon u:object_r:fingerprint_vendor_data_file:s0 "$STAGE/data/vendor_de/0/fpdata" 2>/dev/null || true
 # A guest lock state from before the weaver guard (patches/guest_no_weaver.py)
 # holds protectors in the phone's weaver slots, which the guarded framework
 # can no longer read, so the guest could not unlock its own user 0. Only the
@@ -5642,6 +5718,7 @@ echo "=== 5d. $(date +%T) Bridging host /data app and storage trees into the sta
 # destroyUserData(0) went through the host installd into One UI's real
 # /data/data and /data/media. Host path:stage path.
 # $BRIDGES comes from bridges.sh (sourced at the top).
+rm -f "$STAGE/share_holder.pid"
 for pair in $BRIDGES; do
     h=${pair%%:*}; s=${pair#*:}
     mkdir -p "$STAGE/data/$s" 2>/dev/null || true
@@ -6162,12 +6239,24 @@ while true; do
     # fully for all OS'es and all devices": once per framework (a set update changes it), two minutes after boot,
     # every app is compiled fully (speed), in the background so the network fix below keeps its pace.
     up=$((up + 1))
-    if [ $up -eq 12 ]; then
-        key=$(cat /system/framework/framework.jar /system/framework/services.jar 2>/dev/null | md5sum | cut -d' ' -f1)
+    # 0.5.22 (owner, 11-18: "I dont need OneOS optimization step"; it slowed the phone down with no gain
+    # he could see): off by default for every system. A guest file /data/oneos_dexopt.enable (the stage's
+    # data/oneos_dexopt.enable) turns it back on.
+    if [ $up -eq 12 ] && [ -f /data/oneos_dexopt.enable ]; then
+        # Keyed on the boot class path's framework.jar only: the apps' compiled code depends on it, never on
+        # services.jar (0.5.20: a services-only set update, the ColorOS fingerprint fix, started all 486 again).
+        # An app whose code is still up to date is skipped by compile itself.
+        key=$(cat /system/framework/framework.jar 2>/dev/null | md5sum | cut -d' ' -f1)
+        # The 0.5.18-0.5.19 key (framework.jar and services.jar together) of a finished run counts as this one.
+        okey=$(cat /system/framework/framework.jar /system/framework/services.jar 2>/dev/null | md5sum | cut -d' ' -f1)
+        [ -n "$key" ] && [ "$(cat /data/oneos_dexopt.done 2>/dev/null)" = "$okey" ] && echo "$key" > /data/oneos_dexopt.done
         if [ -n "$key" ] && [ "$(cat /data/oneos_dexopt.done 2>/dev/null)" != "$key" ]; then
             # App by app, with its progress in a notification (owner: show that it is optimizing); the last one
             # says it is done and is swiped away (a shell notification cannot be withdrawn).
-            ( note() { cmd notification post -S bigtext -t "$1" oneos_dexopt "$2" > /dev/null 2>&1; }
+            # As the shell user: a notification root posts names the package "root" and the notification
+            # service drops it ("Cannot fix notification ... NameNotFoundException: root"; A36 ColorOS and
+            # Nothing OS, 0.5.19: the progress never showed).
+            ( note() { if [ -x /data/oneos_bin/busybox ]; then /data/oneos_bin/busybox setuidgid 2000 cmd notification post -S bigtext -t "$1" oneos_dexopt "$2"; else cmd notification post -S bigtext -t "$1" oneos_dexopt "$2"; fi > /dev/null 2>&1; }
               pkgs=$(pm list packages 2>/dev/null | sed -n 's/^package://p')
               total=$(printf '%s\n' "$pkgs" | grep -c .)
               echo "$(date) dexopt: compiling all $total apps fully for this framework" >> /data/app_storage.log
@@ -6448,7 +6537,8 @@ mount_payload "bt" "com.android.bt"
 # The image's own copies of modules One UI's build cannot serve it, only when
 # make-overlays.sh staged them (Pixel: android.telecom lives in telephonycore;
 # conscrypt and profiling match its ART and framework). Never extracted here.
-for m in telephonycore conscrypt profiling; do
+# One UI 9.5 on One UI 9.0: npumanager and webapp, which One UI 9.0 has no module for (make-overlays.sh).
+for m in telephonycore conscrypt profiling npumanager webapp; do
     [ -f "$STAGE/${m}_payload.img" ] && mount_payload "$m" "com.android.$m"
 done
 # The guest's apps compiled by the guest's own artd (guest_start.sh runs it for
@@ -6560,12 +6650,18 @@ echo "=== 9. $(date +%T) Bind-mounting Remaining Non-Payload APEXes ==="
 APEX_MOUNTED=" $(awk -v root="$ROOTFS/apex/" 'index($2, root) == 1 { print substr($2, length(root) + 1) }' /proc/mounts | tr '\n' ' ') "
 APEX_TODO=""
 APEX_DIRS=""
+# A One UI image (0.5.22, One UI 9.5 on One UI 9.0) is Samsung's framework: its boot class
+# path needs Samsung's modules (SystemServiceRegistry calls LifeGuardManagerFrameworkInitializer
+# and ShellFrameworkInitializer; without them the zygote died preloading it, A36 run 2), so it
+# gets the phone's. Every other image keeps them out, as before.
+GUEST_ONEUI=0
+grep -q '^ro.build.version.oneui=' "$ROOTFS/system/build.prop" 2>/dev/null && GUEST_ONEUI=1
 for a in /apex/*; do
     [ -d "$a" ] || continue
     base=${a##*/}
     case "$base" in
         *samsung*)
-       continue
+       [ "$GUEST_ONEUI" = 1 ] || continue
        ;;
     esac
     case "$APEX_MOUNTED" in
@@ -6875,6 +6971,78 @@ if [ "${ONEOS_GUEST_OEM_NFC:-0}" != 1 ] && grep -q '^  "image": "oxygenos' "$STA
     if [ -d "$d" ] && [ ! -L "$d" ]; then
         $BB mount -t tmpfs -o ro,size=4k,mode=755 tmpfs "$d" && \
             echo "Hid guest system/priv-app/NfcNci (OxygenOS's NFC app dies without OPPO's NFC HAL; ONEOS_GUEST_OEM_NFC=1 keeps it)"
+    fi
+fi
+# One UI images (0.5.22, One UI 9.5 S948BXXU6ZZKN on One UI 9.0 phones): three of Samsung's own
+# apps cannot work in a guest and crash-loop or mislead (A36 run 9):
+# - KnoxGuard (com.samsung.android.kgclient): the phone's KnoxGuard TA is One UI's and out of the
+#   guest's reach on purpose (services.jar knoxguard_utils_patch); KG 3.0 read the refused TA as
+#   error 0xFF02 and showed a false "Device locked ... 1100FF02" screen in the guest.
+# - SamsungDeviceHealthManagerService (com.sec.android.sdhms): the image's thermal (SIOP) tables
+#   are the S26 Ultra's; on another phone SiopExpression read a null array, 95 crashes. The
+#   session's heat cap (oneos_switch.sh) does the thermal limiting.
+# - SamsungSmartSuggestions (moneta): needs Samsung keep storage, which guest_storage_guards.py
+#   blocks; "creation failed", 28 crashes.
+# ONEOS_GUEST_ONEUI_KEEP_APPS=1 keeps them.
+if grep -q '^ro.build.version.oneui=' "$ROOTFS/system/build.prop" 2>/dev/null && [ "${ONEOS_GUEST_ONEUI_KEEP_APPS:-0}" != 1 ]; then
+    for d in "$ROOTFS"/system/priv-app/KnoxGuard "$ROOTFS"/system/priv-app/SamsungDeviceHealthManagerService \
+             "$ROOTFS"/system/priv-app/SamsungSmartSuggestions; do
+        [ -d "$d" ] && [ ! -L "$d" ] || continue
+        $BB mount -t tmpfs -o ro,size=4k,mode=755 tmpfs "$d" && \
+            echo "Hid guest ${d#"$ROOTFS"/} (One UI image: cannot work in a guest; ONEOS_GUEST_ONEUI_KEEP_APPS=1 keeps it)"
+    done
+fi
+# One UI images (0.5.22): the phone's own netd client library. netd is One UI's; One UI 9.5's
+# libnetd_client.so speaks a newer fwmarkd protocol (FwmarkClient::send(fd, CmdId, ...)) than
+# One UI 9.0's netd reads (FwmarkCommand structs), so every socket bind to a network failed with
+# EBADMSG and every DNS query with ENONET: Wi-Fi connected, "Internet not available", then
+# NETWORK_SELECTION_PERMANENTLY_DISABLED (A36 run 11). The exported C API is the same.
+if grep -q '^ro.build.version.oneui=' "$ROOTFS/system/build.prop" 2>/dev/null; then
+    for b in lib64 lib; do
+        g="$ROOTFS/system/$b/libnetd_client.so"
+        [ -f "$g" ] && [ -f "/system/$b/libnetd_client.so" ] || continue
+        cmp -s "$g" "/system/$b/libnetd_client.so" && continue
+        $BB mount --bind -o ro "/system/$b/libnetd_client.so" "$g" && \
+            echo "Bound One UI's /system/$b/libnetd_client.so over the guest's (One UI image: One UI's netd protocol)"
+    done
+fi
+# One UI images (0.5.22): the image's software features on the phone's hardware features, and
+# the phone's camera configuration (A36 run 12: the S26 Ultra's camera app read the S26 Ultra's
+# /system/cameradata and crashed on "There is no capability for : 20"; the A36 has other cameras).
+# Both are prepared here, in One UI's namespace, and bound in the guest's by guest_start.sh:
+# - $STAGE/data/oneos_floating_feature.xml: One UI's /vendor/etc/floating_feature.xml with every
+#   SEC_FLOATING_FEATURE_<KEY>=value of $STAGE/oneui_floating_add.txt (the set's, software only)
+#   set or added. ONEOS_ONEUI_FLOATING=0 keeps the phone's list as it is.
+# - $STAGE/data/oneos_cameradata: a copy of One UI's /system/cameradata.
+rm -rf "$STAGE/data/oneos_cameradata" "$STAGE/data/oneos_floating_feature.xml"
+if grep -q '^ro.build.version.oneui=' "$ROOTFS/system/build.prop" 2>/dev/null && [ -d "$STAGE/data" ]; then
+    if [ -d /system/cameradata ] && cp -a /system/cameradata "$STAGE/data/oneos_cameradata" 2>/dev/null; then
+        # Shooting modes the image's camera app has no table entry for (One UI 9.5's, on the A36:
+        # "There is no matched ShootingModeIdByName with : LIVE_FOCUS_LITE", run 13) are left empty,
+        # the answer for "no such mode"; MACRO's mode entry is turned off with it.
+        cf="$STAGE/data/oneos_cameradata/camera-feature.xml"
+        [ -f "$cf" ] && sed -i -e 's/="LIVE_FOCUS_LITE"/=""/g' \
+            -e '/name="SHOOTING_MODE_MACRO"/{s/back="MACRO"/back=""/;s/enable="true"/enable="false"/}' "$cf"
+        chown -R 0:0 "$STAGE/data/oneos_cameradata"; chmod -R go-w "$STAGE/data/oneos_cameradata"
+        echo "Camera: One UI's /system/cameradata copied for the guest ($(ls "$STAGE/data/oneos_cameradata" | wc -l) entries)"
+    fi
+    FF_ADD="$STAGE/oneui_floating_add.txt"
+    if [ "${ONEOS_ONEUI_FLOATING:-1}" = 1 ] && [ -f "$FF_ADD" ] && [ -f /vendor/etc/floating_feature.xml ]; then
+        if awk -v addf="$FF_ADD" '
+            BEGIN { while ((getline l < addf) > 0) { if (l ~ /^SEC_FLOATING_FEATURE_[A-Z0-9_]+=/) { k = substr(l, 1, index(l, "=") - 1); v = substr(l, index(l, "=") + 1); add[k] = v; order[++n] = k } } }
+            { line = $0
+              if (match(line, /<SEC_FLOATING_FEATURE_[A-Z0-9_]+>/)) { k = substr(line, RSTART + 1, RLENGTH - 2)
+                  if (k in add) { sub(/>.*</, ">" add[k] "<", line); done[k] = 1 } }
+              if (line ~ /<\/SecFloatingFeatureSet>/) { for (i = 1; i <= n; i++) if (!(order[i] in done)) print "    <" order[i] ">" add[order[i]] "</" order[i] ">" }
+              print line }' /vendor/etc/floating_feature.xml > "$STAGE/data/oneos_floating_feature.xml.tmp" &&
+           grep -q '</SecFloatingFeatureSet>' "$STAGE/data/oneos_floating_feature.xml.tmp"; then
+            mv -f "$STAGE/data/oneos_floating_feature.xml.tmp" "$STAGE/data/oneos_floating_feature.xml"
+            chown 0:0 "$STAGE/data/oneos_floating_feature.xml"; chmod 644 "$STAGE/data/oneos_floating_feature.xml"
+            echo "Floating features: One UI's list with $(grep -c '^SEC_FLOATING_FEATURE_' "$FF_ADD") software features of the image ($(grep -c '<SEC_FLOATING_FEATURE_' "$STAGE/data/oneos_floating_feature.xml") in all)"
+        else
+            rm -f "$STAGE/data/oneos_floating_feature.xml.tmp"
+            echo "!!! Floating features: merge failed, the guest keeps One UI's list"
+        fi
     fi
 fi
 # The phone's eSIM chip is shared hardware, and an eSIM manager (LPA) in the
