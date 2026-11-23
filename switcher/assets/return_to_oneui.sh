@@ -432,6 +432,12 @@ if [ -n "$zs_left" ]; then
     ONEOS_RETURN_MODE=reboot
 fi
 
+# The guest's adb keys, bound over One UI's /data/misc/adb by guest_prepare.sh.
+if zs_bound /data/misc/adb; then
+    if [ -n "$BB" ]; then in_init_ns "$BB" umount -l /data/misc/adb 2>/dev/null; else in_init_ns umount -D -l /data/misc/adb 2>/dev/null; fi
+    zs_bound /data/misc/adb || echo "Took the guest's adb keys off /data/misc/adb"
+fi
+
 # The Bluetooth audio bridge (oneos_switch.sh, Samsung-only HAL phones): stop
 # it and take Android's factory out of the device manifest again before One
 # UI's framework starts. One UI's Bluetooth asks for Android's factory first
@@ -465,6 +471,12 @@ for pair in $BRIDGES; do
     d=${pair%%:*}
     umnt "/data/$d" || umnt -l "/data/$d" || true
 done
+# The read-only view of One UI's folders for Bring apps (guest_prepare.sh, 0.5.31).
+for d in app data user_de; do
+    umnt "/mnt/oneos_oneui/$d" 2>/dev/null || umnt -l "/mnt/oneos_oneui/$d" 2>/dev/null || true
+done
+# HyperOS's status bar threshold (guest_prepare.sh, 0.5.31): only the value OneOS set.
+[ "$(getprop debug.layered.strategy.phone)" = 99 ] && setprop debug.layered.strategy.phone "" 2>/dev/null || true
 # Never touch One UI's files, or start One UI in place, while a bridge is
 # still there: it would act on the guest's staged copy.
 still_bridged=""
@@ -762,7 +774,10 @@ for p in /proc/[0-9]*; do
     [ -n "$n" ] && [ -n "$I_NS" ] && [ "$n" != "$I_NS" ] || continue
     case "$seen" in *" $n "*) continue ;; esac
     seen="$seen$n "
-    mps=$("$BB" awk -v s="$S/" 'index($5, s) == 1 {print $5}' "$p/mountinfo" 2>/dev/null | "$BB" sort -r)
+    # And binds from the stage onto One UI's paths, by source like the check below (11-19 report e3a52c49,
+    # S25 on ColorOS: "stage still mounted: .../samcam_build/libsimba.heifdec.media.samsung.so on
+    # /system/lib64/..." in one process's namespace, a reboot instead of the in-place return).
+    mps=$("$BB" awk -v s="$S/" -v r="/local/tmp/oneos/" 'index($5, s) == 1 || index($4, r) == 1 {print $5}' "$p/mountinfo" 2>/dev/null | "$BB" sort -r -u)
     [ -n "$mps" ] || continue
     u=0; t=0; pv=0
     for mp in $mps; do

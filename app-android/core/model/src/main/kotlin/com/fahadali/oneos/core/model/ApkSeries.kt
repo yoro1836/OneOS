@@ -18,6 +18,8 @@ enum class ApkSeries(val id: String, val label: String, val profileIds: List<Str
         listOf(
             Profiles.ID_S_ULTRA_8850, Profiles.ID_S_PLUS_8850, Profiles.ID_S_8850, Profiles.ID_S_8850_JP, Profiles.ID_S_PLUS_9965,
             Profiles.ID_FLIP8, Profiles.ID_S_9965,
+            // 0.5.28: the Galaxy S26 FE (Exynos 2500).
+            Profiles.ID_S26_FE,
         ),
     ),
     S25(
@@ -48,7 +50,7 @@ enum class ApkSeries(val id: String, val label: String, val profileIds: List<Str
             // 0.4.93: the au Galaxy S23 (SCG19, One UI 9).
             Profiles.ID_S_8550_JP,
             // 0.4.95: the Galaxy M35 5G (One UI 9) and the Galaxy A15 5G with MediaTek (One UI 8.5).
-            Profiles.ID_M35, Profiles.ID_A15_5G,
+            Profiles.ID_M35, Profiles.ID_M36, Profiles.ID_A15_5G,
         ),
     ),
     ;

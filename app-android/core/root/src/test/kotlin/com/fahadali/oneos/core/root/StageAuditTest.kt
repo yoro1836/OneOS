@@ -220,7 +220,14 @@ class StageAuditTest {
         assertEquals(Images.ALL.filter { it.sdk == 36 }.map { it.id }, shVar("IMAGES_SDK36").split(' ').filter { it.isNotEmpty() })
         assertEquals(InstalldExpected.carried(36), shVar("INSTALLD_SHA_36"))
         assertEquals(InstalldExpected.accepted(36), shVar("INSTALLD_OK_36").split(' ').toSet())
-        assertEquals(InstalldExpected.accepted(37), setOf(shVar("INSTALLD_SHA")))
+        // 0.5.28: One UI 9.5's table too, which root accepts only with a set whose guards.txt has RUNTIME_CODES
+        // (the line make-overlays.sh and retrofit-abi-codes.sh write).
+        assertEquals(InstalldExpected.accepted(37), setOf(shVar("INSTALLD_SHA"), shVar("INSTALLD_SHA_95")))
+        assertEquals(InstalldExpected.SHA256_95, shVar("INSTALLD_SHA_95"))
+        val runtimeLine = shVar("RUNTIME_CODES")
+        for (f in listOf("scripts/make-overlays.sh", "scripts/retrofit-abi-codes.sh")) {
+            assertTrue(f, File("../../../$f").readText().contains(runtimeLine))
+        }
         // Enabled profiles only, each with its ids and form (SM- model numbers, and docomo's SC- ones;
         // 0.4.17: the Z Flip7's flip, which root runs with the phone settings; 0.4.74: au's SCG ones).
         val rows = Regex("""^\s+([a-z0-9-]+)\) echo "(S[MC]-\S+|SCG\S+) (\S+) (\S+) (fold|bar|flip)" ;;$""", RegexOption.MULTILINE)
@@ -252,7 +259,9 @@ class StageAuditTest {
         assertTrue(data.indexOf(StageStatus.PIXEL_WORD) < data.indexOf("\"${StageStatus.HYPEROS_WORD}\""))
         assertTrue(data.contains("com.coloros."))
         val status = File(Shipped.fullAssets, "root/status.list").readText()
-        assertTrue(status.contains("for w in com.oplus. com.coloros. org.lineageos. ${StageStatus.PIXEL_WORD} ${StageStatus.INFINITYX_WORD} ${StageStatus.HYPEROS_WORD} ${StageStatus.OXYGENOS_WORD} ${StageStatus.ORIGINOS_WORD}; do"))
+        assertTrue(status.contains("for w in com.oplus. com.coloros. org.lineageos. ${StageStatus.PIXEL_WORD} ${StageStatus.INFINITYX_WORD} ${StageStatus.HYPEROS_WORD} ${StageStatus.OXYGENOS_WORD} ${StageStatus.ORIGINOS_WORD} ${StageStatus.PIXELOS_WORD}; do"))
+        // 0.5.35: PixelOS's updater first (its data has Pixel's launcher and LineageOS packages too).
+        assertTrue(data.indexOf(StageStatus.PIXELOS_WORD) in 0 until data.indexOf(StageStatus.INFINITYX_WORD))
         // 0.4.67: OxygenOS's word right after Infinity-X's and before ColorOS's (its data has com.oplus. too).
         assertTrue(data.indexOf(StageStatus.INFINITYX_WORD) < data.indexOf(StageStatus.OXYGENOS_WORD))
         assertTrue(data.indexOf(StageStatus.OXYGENOS_WORD) in 0 until data.indexOf("com.oplus."))
@@ -266,7 +275,7 @@ class StageAuditTest {
         // SET_COMMON and its own files.
         assertTrue(PackageSets.X9U_IN_1105_SULTRA.names.containsAll(common))
         assertEquals(
-            setOf("oplus-framework_patched.jar", "cellbroadcast_payload.img", "framework_patched.jar", "telephony-common_patched.jar", "libcamera_client_patched.so", "samcam.tar", PackageSets.THEME_STORE_APK, PackageSets.ODM_AI, "ColorPanoramicSystemUI.apk", "samcam_a.tar"), // 0.4.97: + wallpaper AOD SystemUI; 0.5.20 r3: + samcam_a.tar
+            setOf("oplus-framework_patched.jar", "cellbroadcast_payload.img", "framework_patched.jar", "telephony-common_patched.jar", "libcamera_client_patched.so", "samcam.tar", PackageSets.THEME_STORE_APK, PackageSets.ODM_AI, "ColorPanoramicSystemUI.apk", "samcam_a.tar", "OplusGestureUI_patched.apk", "OplusGestureUI_patched.apk.src_sha256"), // 0.4.97: + wallpaper AOD SystemUI; 0.5.20 r3: + samcam_a.tar; 0.5.32 r8: + raise to wake
             PackageSets.X9U_IN_1105_SULTRA.names.toSet() - common.toSet(),
         )
         // 0.4.59: the bar Pixel sets add double tap to sleep (their own SystemUI and launcher) to SET_PIXEL.
